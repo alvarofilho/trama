@@ -62,6 +62,24 @@ describe("Agent connection experience", () => {
     ]);
     expect(root.textContent).not.toContain("Claude Code");
   });
+  it("uses each provider icon instead of a letter avatar", async () => {
+    const { state, fixture, root } = await render(codex);
+    state.agents.set([
+      codex,
+      { ...codex, id: "claude", name: "Claude Code" },
+      { ...codex, id: "opencode", name: "OpenCode" },
+      { ...codex, id: "gemini", name: "Gemini CLI" },
+    ]);
+    await fixture.whenStable();
+    expect(
+      [...root.querySelectorAll("app-agent-icon")].map((icon) =>
+        icon.getAttribute("data-agent-icon"),
+      ),
+    ).toEqual(["codex", "claude", "opencode", "gemini"]);
+    expect(
+      [...root.querySelectorAll(".provider-mark")].some((mark) => mark.textContent?.trim()),
+    ).toBe(false);
+  });
   it("offers device-code login and reports a failed launch beside the chosen agent", async () => {
     const { root, fixture } = await render(codex);
     const button = [...root.querySelectorAll("button")].find((b) =>

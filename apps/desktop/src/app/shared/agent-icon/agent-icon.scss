@@ -1,0 +1,20 @@
+:host {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  color: var(--text);
+}
+
+:host([data-agent-icon="claude"]) {
+  color: #d97757;
+}
+
+:host([data-agent-icon="gemini"]) {
+  color: #8e75b2;
+}
+
+svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}

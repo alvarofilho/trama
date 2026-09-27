@@ -25,6 +25,7 @@ export interface AgentSession {
   purpose: "task" | "login" | "device-login" | "logout";
   status: "running" | "exited" | "stopped" | "failed";
   startedAt: number;
+  endedAt: number | null;
   exitCode: number | null;
   error: string | null;
 }

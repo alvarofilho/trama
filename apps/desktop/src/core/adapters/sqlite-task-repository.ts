@@ -73,6 +73,15 @@ export class SqliteTaskRepository implements TaskRepository {
     return rows.map(mapTask);
   }
 
+  async find(taskId: string): Promise<Task | null> {
+    const db = await appDatabase();
+    const rows = await db.select<TaskRow[]>(
+      "SELECT id, project_id, title, prompt, agent_id, model, effort, use_worktree, status, branch, worktree_path, created_at, error FROM tasks WHERE id = $1 LIMIT 1",
+      [taskId],
+    );
+    return rows[0] ? mapTask(rows[0]) : null;
+  }
+
   async create(
     projectId: string,
     title: string,
@@ -137,11 +146,6 @@ export class SqliteTaskRepository implements TaskRepository {
       error,
       taskId,
     ]);
-  }
-
-  async remove(taskId: string): Promise<void> {
-    const db = await appDatabase();
-    await db.execute("DELETE FROM tasks WHERE id = $1", [taskId]);
   }
 }
 

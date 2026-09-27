@@ -340,6 +340,8 @@ pub struct SessionInfo {
     pub purpose: String,
     pub status: String,
     pub started_at: u64,
+    #[serde(default)]
+    pub ended_at: Option<u64>,
     pub exit_code: Option<u32>,
     pub error: Option<String>,
 }
@@ -402,6 +404,7 @@ impl AgentManager {
             let mut info: SessionInfo = serde_json::from_str(&record).map_err(|e| e.to_string())?;
             if info.status == "running" || info.status == "starting" {
                 info.status = "stopped".into();
+                info.ended_at = Some(unix_millis());
                 info.error = Some("A execução foi interrompida ao fechar o aplicativo; a conversa não foi retomada.".into());
                 persist(&database, &info)?;
             }
@@ -418,6 +421,94 @@ impl AgentManager {
         Ok(Self(Arc::new(Mutex::new(Inner { sessions, database }))))
     }
 
+    fn remove_task(
+        &self,
+        database_path: &Path,
+        task_id: &str,
+        remove_worktree: bool,
+    ) -> Result<(), String> {
+        let inner = self.0.lock().map_err(|e| e.to_string())?;
+        if inner.sessions.values().any(|session| {
+            session.info.task_id.as_deref() == Some(task_id) && session.info.status == "running"
+        }) {
+            return Err("Interrompa a execução da tarefa antes de removê-la.".into());
+        }
+        let mut database = Connection::open(database_path).map_err(|e| e.to_string())?;
+        database
+            .execute_batch(
+                "PRAGMA foreign_keys = ON;
+                 CREATE TABLE IF NOT EXISTS task_removal_intents (
+                   task_id TEXT PRIMARY KEY NOT NULL,
+                   remove_worktree INTEGER NOT NULL,
+                   worktree_path TEXT
+                 );",
+            )
+            .map_err(|e| e.to_string())?;
+        if remove_worktree {
+            let had_intent = database
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM task_removal_intents WHERE task_id = ?1 AND remove_worktree = 1)",
+                    [task_id],
+                    |row| row.get::<_, bool>(0),
+                )
+                .map_err(|e| e.to_string())?;
+            let (project_id, project_path, base_branch, worktree_path, task_branch) = database
+                .query_row(
+                    "SELECT t.project_id, p.path, p.branch, t.worktree_path, t.branch FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ?1",
+                    [task_id],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, Option<String>>(3)?, row.get::<_, Option<String>>(4)?)),
+                )
+                .optional()
+                .map_err(|e| e.to_string())?
+                .ok_or("A tarefa não foi encontrada.")?;
+            let worktree_path =
+                worktree_path.ok_or("Esta tarefa não possui um worktree para remover.")?;
+            let stored_worktree = PathBuf::from(&worktree_path);
+            if stored_worktree.exists() {
+                let task_branch = task_branch
+                    .ok_or("A branch da tarefa não está disponível para verificar a integração.")?;
+                ensure_branch_integrated(&project_path, &task_branch, &base_branch)?;
+                let expected = database_path
+                    .parent()
+                    .ok_or("O diretório de dados do Trama não está acessível.")?
+                    .join("worktrees")
+                    .join(project_id)
+                    .join(task_id)
+                    .canonicalize()
+                    .map_err(|_| "O worktree da tarefa não está acessível.")?;
+                let worktree = stored_worktree
+                    .canonicalize()
+                    .map_err(|_| "O worktree da tarefa não está acessível.")?;
+                if worktree != expected {
+                    return Err("O caminho do worktree não corresponde à tarefa.".into());
+                }
+                database
+                    .execute(
+                        "INSERT OR REPLACE INTO task_removal_intents (task_id, remove_worktree, worktree_path) VALUES (?1, 1, ?2)",
+                        params![task_id, worktree_path],
+                    )
+                    .map_err(|e| e.to_string())?;
+                remove_git_worktree(&project_path, &worktree)?;
+            } else if !had_intent {
+                return Err("O worktree da tarefa não está acessível.".into());
+            }
+        }
+        let transaction = database.transaction().map_err(|e| e.to_string())?;
+        let removed = transaction
+            .execute("DELETE FROM tasks WHERE id = ?1", [task_id])
+            .map_err(|e| e.to_string())?;
+        if removed == 0 {
+            return Err("A tarefa não foi encontrada.".into());
+        }
+        transaction
+            .execute(
+                "DELETE FROM task_removal_intents WHERE task_id = ?1",
+                [task_id],
+            )
+            .map_err(|e| e.to_string())?;
+        transaction.commit().map_err(|e| e.to_string())
+    }
+
     fn start(
         &self,
         executable: Executable,
@@ -426,8 +517,22 @@ impl AgentManager {
         task_id: Option<String>,
         agent_id: String,
         purpose: String,
+        task_database_path: Option<&Path>,
     ) -> Result<SessionInfo, String> {
         let mut inner = self.0.lock().map_err(|e| e.to_string())?;
+        if let (Some(task_id), Some(database_path)) = (task_id.as_deref(), task_database_path) {
+            let database = Connection::open(database_path).map_err(|e| e.to_string())?;
+            let exists = database
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1)",
+                    [task_id],
+                    |row| row.get::<_, bool>(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if !exists {
+                return Err("A tarefa não foi encontrada. Atualize a lista de tarefas.".into());
+            }
+        }
         if inner.sessions.values().any(|s| {
             s.runtime.is_some()
                 && (task_id.is_some() && s.info.task_id == task_id
@@ -462,10 +567,8 @@ impl AgentManager {
             agent_id,
             purpose,
             status: "running".into(),
-            started_at: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64,
+            started_at: unix_millis(),
+            ended_at: None,
             exit_code: None,
             error: None,
         };
@@ -565,6 +668,7 @@ impl AgentManager {
                 }
                 _ => unreachable!(),
             }
+            session.info.ended_at = Some(unix_millis());
             let runtime = session.runtime.take();
             let info = session.info.clone();
             if let Err(error) = persist(&inner.database, &info) {
@@ -588,6 +692,7 @@ impl AgentManager {
                     runtime.stopping = true;
                     let _ = runtime.child.kill();
                     session.info.status = "stopped".into();
+                    session.info.ended_at = Some(unix_millis());
                     resources.push(runtime);
                 }
             }
@@ -598,6 +703,59 @@ impl AgentManager {
         // Close pseudo consoles while reader threads can still drain their pipes.
         drop(resources);
     }
+}
+
+fn ensure_branch_integrated(
+    project_path: &str,
+    task_branch: &str,
+    base_branch: &str,
+) -> Result<(), String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(project_path)
+        .args(["merge-base", "--is-ancestor", task_branch, base_branch])
+        .output()
+        .map_err(|e| format!("Não foi possível executar o Git: {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    if output.status.code() == Some(1) {
+        return Err(format!(
+            "Integre a branch {task_branch} em {base_branch} antes de remover o worktree."
+        ));
+    }
+    let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(if detail.is_empty() {
+        "Não foi possível verificar se a branch da tarefa foi integrada.".into()
+    } else {
+        format!("Não foi possível verificar a integração da branch. Git: {detail}")
+    })
+}
+
+fn remove_git_worktree(project_path: &str, worktree: &Path) -> Result<(), String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(project_path)
+        .args(["worktree", "remove"])
+        .arg(worktree)
+        .output()
+        .map_err(|e| format!("Não foi possível executar o Git: {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(if detail.is_empty() {
+        "Não foi possível remover o worktree. Verifique se há alterações pendentes.".into()
+    } else {
+        format!("Não foi possível remover o worktree. Git: {detail}")
+    })
+}
+
+fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 fn persist(db: &Connection, info: &SessionInfo) -> Result<(), String> {
@@ -724,7 +882,15 @@ pub async fn start_agent(
             cwd
         };
         // Prompts are sent deliberately through the terminal after native trust/login prompts.
-        manager.start(executable, args, &cwd, task_id, agent_id, purpose)
+        manager.start(
+            executable,
+            args,
+            &cwd,
+            task_id,
+            agent_id,
+            purpose,
+            Some(&data.join("trama.db")),
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -736,6 +902,18 @@ pub fn list_agent_sessions(manager: State<'_, AgentManager>) -> Result<Vec<Sessi
     let mut sessions: Vec<_> = inner.sessions.values().map(|s| s.info.clone()).collect();
     sessions.sort_by_key(|s| std::cmp::Reverse(s.started_at));
     Ok(sessions)
+}
+
+#[tauri::command]
+pub fn remove_task(
+    app: tauri::AppHandle,
+    manager: State<'_, AgentManager>,
+    task_id: String,
+    remove_worktree: bool,
+) -> Result<(), String> {
+    uuid::Uuid::parse_str(&task_id).map_err(|_| "Tarefa inválida.")?;
+    let directory = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    manager.remove_task(&directory.join("trama.db"), &task_id, remove_worktree)
 }
 
 #[tauri::command]
@@ -902,6 +1080,7 @@ mod tests {
                 Some("fixture".into()),
                 "fixture".into(),
                 "task".into(),
+                None,
             )
             .unwrap();
         assert!(manager
@@ -911,7 +1090,8 @@ mod tests {
                 &std::env::temp_dir(),
                 None,
                 "fixture".into(),
-                "logout".into()
+                "logout".into(),
+                None,
             )
             .is_err());
         let start = Instant::now();
@@ -919,6 +1099,7 @@ mod tests {
         assert!(start.elapsed() < Duration::from_secs(10));
         let inner = manager.0.lock().unwrap();
         assert_eq!(inner.sessions[&session.id].info.status, "stopped");
+        assert!(inner.sessions[&session.id].info.ended_at.is_some());
         assert!(inner.sessions[&session.id].runtime.is_none());
         let record: String = inner
             .database
@@ -947,6 +1128,7 @@ mod tests {
                 Some("fixture".into()),
                 "fixture".into(),
                 "task".into(),
+                None,
             )
             .unwrap();
         assert!(manager
@@ -956,7 +1138,8 @@ mod tests {
                 &std::env::temp_dir(),
                 Some("fixture".into()),
                 "fixture".into(),
-                "task".into()
+                "task".into(),
+                None,
             )
             .is_err());
         let deadline = Instant::now() + Duration::from_secs(15);
@@ -1033,6 +1216,7 @@ mod tests {
                 None,
                 "codex".into(),
                 "probe".into(),
+                None,
             )
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(15);
@@ -1079,6 +1263,7 @@ mod tests {
             purpose: "task".into(),
             status: "running".into(),
             started_at: 1,
+            ended_at: None,
             exit_code: None,
             error: None,
         };
@@ -1090,9 +1275,267 @@ mod tests {
             let manager = AgentManager::open(&path).unwrap();
             let inner = manager.0.lock().unwrap();
             assert_eq!(inner.sessions["test"].info.status, "stopped");
+            assert!(inner.sessions["test"].info.ended_at.is_some());
             assert!(inner.sessions["test"].output.is_empty());
         }
         std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+    #[test]
+    fn removes_an_idle_task_from_the_workspace_database() {
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir(&directory).unwrap();
+        let agent_database = directory.join("agents.sqlite");
+        let task_database = directory.join("trama.db");
+        {
+            let database = Connection::open(&task_database).unwrap();
+            database
+                .execute_batch(
+                    "CREATE TABLE tasks (id TEXT PRIMARY KEY); INSERT INTO tasks VALUES ('task');",
+                )
+                .unwrap();
+            let manager = AgentManager::open(&agent_database).unwrap();
+
+            manager.remove_task(&task_database, "task", false).unwrap();
+
+            let remaining: u32 = database
+                .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(remaining, 0);
+        }
+        std::fs::remove_file(agent_database).unwrap();
+        std::fs::remove_file(task_database).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+    #[test]
+    fn reconciles_a_persisted_removal_after_the_worktree_is_already_gone() {
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir(&directory).unwrap();
+        let agent_database = directory.join("agents.sqlite");
+        let task_database = directory.join("trama.db");
+        {
+            let database = Connection::open(&task_database).unwrap();
+            database
+                .execute_batch(
+                    "CREATE TABLE projects (id TEXT PRIMARY KEY, path TEXT NOT NULL, branch TEXT NOT NULL);
+                     CREATE TABLE tasks (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, worktree_path TEXT, branch TEXT);
+                     CREATE TABLE task_removal_intents (task_id TEXT PRIMARY KEY, remove_worktree INTEGER NOT NULL, worktree_path TEXT);
+                     INSERT INTO projects VALUES ('project', 'missing-project', 'main');
+                     INSERT INTO tasks VALUES ('task', 'project', 'missing-worktree', 'task-branch');
+                     INSERT INTO task_removal_intents VALUES ('task', 1, 'missing-worktree');",
+                )
+                .unwrap();
+            let manager = AgentManager::open(&agent_database).unwrap();
+
+            manager.remove_task(&task_database, "task", true).unwrap();
+
+            let remaining: u32 = database
+                .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(remaining, 0);
+        }
+        std::fs::remove_file(agent_database).unwrap();
+        std::fs::remove_file(task_database).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+    #[test]
+    fn refuses_task_removal_while_its_session_is_running() {
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir(&directory).unwrap();
+        let agent_database = directory.join("agents.sqlite");
+        let task_database = directory.join("trama.db");
+        {
+            let database = Connection::open(&task_database).unwrap();
+            database
+                .execute_batch(
+                    "CREATE TABLE tasks (id TEXT PRIMARY KEY); INSERT INTO tasks VALUES ('task');",
+                )
+                .unwrap();
+            let manager = AgentManager::open(&agent_database).unwrap();
+            manager.0.lock().unwrap().sessions.insert(
+                "session".into(),
+                Session {
+                    info: SessionInfo {
+                        id: "session".into(),
+                        task_id: Some("task".into()),
+                        agent_id: "codex".into(),
+                        purpose: "task".into(),
+                        status: "running".into(),
+                        started_at: 1,
+                        ended_at: None,
+                        exit_code: None,
+                        error: None,
+                    },
+                    runtime: None,
+                    output: VecDeque::new(),
+                    offset: 0,
+                },
+            );
+
+            let error = manager
+                .remove_task(&task_database, "task", false)
+                .unwrap_err();
+
+            assert!(error.contains("Interrompa a execução"));
+            let remaining: u32 = database
+                .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(remaining, 1);
+        }
+        std::fs::remove_file(agent_database).unwrap();
+        std::fs::remove_file(task_database).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+    #[test]
+    fn refuses_a_dirty_worktree_then_removes_it_when_clean_and_preserves_its_branch() {
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let repository = directory.join("repository");
+        let worktree = directory.join("worktrees").join("project").join("task");
+        std::fs::create_dir_all(&repository).unwrap();
+        for args in [
+            vec!["init"],
+            vec!["config", "user.email", "trama@example.invalid"],
+            vec!["config", "user.name", "Trama Test"],
+        ] {
+            assert!(Command::new("git")
+                .arg("-C")
+                .arg(&repository)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        std::fs::write(repository.join("README.md"), "trama").unwrap();
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(&repository)
+            .args(["add", "README.md"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(&repository)
+            .args(["commit", "-m", "fixture"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(&repository)
+            .args(["branch", "-M", "main"])
+            .status()
+            .unwrap()
+            .success());
+        std::fs::create_dir_all(worktree.parent().unwrap()).unwrap();
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(&repository)
+            .args(["worktree", "add", "-b", "task-branch"])
+            .arg(&worktree)
+            .status()
+            .unwrap()
+            .success());
+        let agent_database = directory.join("agents.sqlite");
+        let task_database = directory.join("trama.db");
+        {
+            let database = Connection::open(&task_database).unwrap();
+            database
+                .execute_batch(&format!(
+                    "CREATE TABLE projects (id TEXT PRIMARY KEY, path TEXT NOT NULL, branch TEXT NOT NULL);\
+                     CREATE TABLE tasks (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, worktree_path TEXT, branch TEXT);\
+                     INSERT INTO projects VALUES ('project', '{}', 'main');\
+                     INSERT INTO tasks VALUES ('task', 'project', '{}', 'task-branch');",
+                    repository.to_string_lossy(),
+                    worktree.to_string_lossy(),
+                ))
+                .unwrap();
+            let manager = AgentManager::open(&agent_database).unwrap();
+
+            std::fs::write(worktree.join("pending.txt"), "pending").unwrap();
+            let error = manager
+                .remove_task(&task_database, "task", true)
+                .unwrap_err();
+            assert!(error.contains("Não foi possível remover o worktree"));
+            let remaining: u32 = database
+                .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(remaining, 1);
+            assert!(worktree.exists());
+            std::fs::remove_file(worktree.join("pending.txt")).unwrap();
+
+            std::fs::write(worktree.join("change.txt"), "not integrated").unwrap();
+            assert!(Command::new("git")
+                .arg("-C")
+                .arg(&worktree)
+                .args(["add", "change.txt"])
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .arg("-C")
+                .arg(&worktree)
+                .args(["commit", "-m", "task change"])
+                .status()
+                .unwrap()
+                .success());
+            let error = manager
+                .remove_task(&task_database, "task", true)
+                .unwrap_err();
+            assert!(error.contains("Integre a branch"));
+            assert!(worktree.exists());
+
+            assert!(Command::new("git")
+                .arg("-C")
+                .arg(&repository)
+                .args(["merge", "--ff-only", "task-branch"])
+                .status()
+                .unwrap()
+                .success());
+            manager.remove_task(&task_database, "task", true).unwrap();
+
+            assert!(!worktree.exists());
+            let branches = Command::new("git")
+                .arg("-C")
+                .arg(&repository)
+                .args(["branch", "--list", "task-branch"])
+                .output()
+                .unwrap();
+            assert!(String::from_utf8_lossy(&branches.stdout).contains("task-branch"));
+        }
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn start_rejects_a_task_removed_before_the_manager_lock_is_acquired() {
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir(&directory).unwrap();
+        let task_database = directory.join("trama.db");
+        Connection::open(&task_database)
+            .unwrap()
+            .execute_batch("CREATE TABLE tasks (id TEXT PRIMARY KEY);")
+            .unwrap();
+        let manager = AgentManager::open(Path::new(":memory:")).unwrap();
+        let executable = Executable {
+            program: directory.join("not-used"),
+            prefix: Vec::new(),
+            source: "test".into(),
+        };
+
+        let error = match manager.start(
+            executable,
+            Vec::new(),
+            &directory,
+            Some("removed-task".into()),
+            "codex".into(),
+            "task".into(),
+            Some(&task_database),
+        ) {
+            Ok(_) => panic!("removed task must not start"),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("não foi encontrada"));
+        std::fs::remove_file(task_database).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }
     #[test]
@@ -1104,6 +1547,7 @@ mod tests {
             purpose: "login".into(),
             status: "running".into(),
             started_at: 1,
+            ended_at: None,
             exit_code: None,
             error: None,
         };

@@ -160,38 +160,33 @@
       <section class="workspace-page">
         <header class="task-toolbar">
           <div class="task-toolbar-title">
-            <span class="task-kind">TASK</span>
             <h1>{{ selectedTaskTitle() }}</h1>
-            @if (selectedTaskItem(); as item) {
-            <span [class]="'task-status-compact ' + item.group"
-              ><i></i>{{ item.status.label }}</span
-            >
-            }
-            <span class="repo-path task-toolbar-path"
-              ><app-path-label [path]="project.path"
-            /></span>
+            <div class="task-toolbar-meta" aria-label="Resumo da tarefa">
+              @if (selectedTaskItem(); as item) {
+              <span
+                class="task-duration"
+                [title]="'Tempo total de execução: ' + formatDuration(item.totalDurationMs)"
+              >
+                <span>Tempo total</span><strong>{{ formatDuration(item.totalDurationMs) }}</strong>
+              </span>
+              <span [class]="'task-status-compact ' + item.group"
+                ><i></i>{{ item.headlineStatus }}</span
+              >
+              }
+            </div>
           </div>
           <div class="task-toolbar-actions">
             @if (selectedTaskItem(); as item) {
             <button
               class="icon-button remove-task-button"
-              (click)="showRemoveTaskDialog(item.task)"
-              [disabled]="item.group === 'running' || removingTask()"
-              [title]="item.group === 'running' ? 'Interrompa a execução antes de remover' : 'Remover tarefa'"
+              (click)="showRemoveTaskDialog(item)"
+              [disabled]="item.removalBlocked || removingTask()"
+              [title]="item.removalBlocked ? 'Interrompa a execução antes de remover' : 'Remover tarefa'"
               aria-label="Remover tarefa"
             >
               <app-icon name="trash" />
             </button>
             }
-            <button
-              class="icon-button"
-              (click)="page.set('projects')"
-              [disabled]="opening()"
-              title="Trocar projeto"
-              aria-label="Trocar projeto"
-            >
-              <app-icon name="folder" />
-            </button>
             <button class="primary-button" (click)="showTaskDialog()" [disabled]="opening()">
               <app-icon name="plus" />Nova tarefa
             </button>
@@ -321,6 +316,6 @@
   [removing]="removingTask()"
   [error]="removeError()"
   (dismiss)="closeRemoveTaskDialog()"
-  (confirm)="removeTask()"
+  (confirm)="removeTask($event)"
 />
 }

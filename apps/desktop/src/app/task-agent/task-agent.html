@@ -1,0 +1,65 @@
+<section class="task-agent-workspace">
+  @if (current(); as session) {
+  <div class="session-toolbar">
+    <label class="session-picker">
+      <span>Sessão</span>
+      <select #picker [value]="session.id" (change)="selected.set(picker.value)">
+        @for (item of own(); track item.id) {
+        <option [value]="item.id">
+          {{ item.agentId }} · {{ labels[item.status] }} · {{ item.startedAt | date: "dd/MM HH:mm"
+          }}
+        </option>
+        }
+      </select>
+    </label>
+    <button class="secondary-button compact" (click)="expanded.set(!expanded())">
+      {{ expanded() ? "Recolher terminal" : "Abrir terminal" }}
+    </button>
+  </div>
+  @if (expanded()) { @defer (on immediate) {
+  <app-agent-terminal [session]="session" [prompt]="task().prompt" />
+  } } @else {
+  <div class="session-paused">
+    <span class="agent-glyph" aria-hidden="true"></span>
+    <strong>{{ labels[(running() ?? session).status] }}</strong>
+    <p>A sessão continua disponível. Abra o terminal para acompanhar ou interagir.</p>
+    <button class="secondary-button" (click)="expanded.set(true)">Abrir terminal</button>
+  </div>
+  } } @else {
+  <div class="session-empty">
+    <span class="agent-glyph" aria-hidden="true"></span>
+    <strong>Inicie uma conversa</strong>
+    <p>Escolha um agente para trabalhar nesta tarefa.</p>
+  </div>
+  }
+
+  <div class="task-agent-controls">
+    <label>
+      <span>Agente</span>
+      <select
+        #agent
+        [value]="choice()"
+        [disabled]="!!running() || busy()"
+        (change)="choose(agent.value)"
+      >
+        @for (item of state.agents(); track item.id) {
+        <option [value]="item.id" [disabled]="!item.installed">
+          {{ item.name }}{{ item.installed ? "" : " · Não instalado" }}
+        </option>
+        } @empty {
+        <option value="">Verificando agentes…</option>
+        }
+      </select>
+    </label>
+    <button
+      class="primary-button"
+      [disabled]="task().status !== 'ready' || !installedChoice() || busy() || !!running()"
+      (click)="start()"
+    >
+      {{ busy() ? "Iniciando…" : own().length ? "Nova sessão" : "Iniciar agente" }}
+    </button>
+  </div>
+  @if (!installed().length) {
+  <p class="terminal-hint">Abra Agentes para verificar a instalação dos CLIs.</p>
+  }
+</section>

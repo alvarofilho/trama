@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -eu
+
+repository_root="$(git rev-parse --show-toplevel)"
+cd "$repository_root/apps/desktop"
+
+npm test
+npm run build

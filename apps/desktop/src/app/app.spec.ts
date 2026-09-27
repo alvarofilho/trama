@@ -81,11 +81,14 @@ describe("Workspace Angular", () => {
   it("restores the project, formats paths and navigates without reloading", async () => {
     const { fixture, root } = await setup();
     expect(root.querySelector("h1")?.textContent).toBe("O que você quer fazer?");
-    expect(root.querySelector(".repo-path")?.textContent).toBe(String.raw`C:\Users\Alvaro\Trama`);
     expect(root.querySelectorAll('[aria-label="Abrir projetos"]')).toHaveLength(1);
+    expect(root.querySelector('[aria-label="Trocar projeto"]')).toBeNull();
     root.querySelector<HTMLButtonElement>(".project-switcher")!.click();
     await fixture.whenStable();
     expect(root.querySelector(".project-card")?.textContent).toContain("Trama");
+    expect(root.querySelector(".project-card .path-label")?.textContent).toBe(
+      String.raw`C:\Users\Alvaro\Trama`,
+    );
     root.querySelector<HTMLButtonElement>('[aria-label="Conectar agentes"]')!.click();
     await fixture.whenStable();
     expect(root.querySelectorAll(".agent-row")).toHaveLength(0);
@@ -151,6 +154,7 @@ describe("Workspace Angular", () => {
         purpose: "task",
         status: "running",
         startedAt: Date.now() - 120_000,
+        endedAt: null,
         exitCode: null,
         error: null,
       },
@@ -159,6 +163,9 @@ describe("Workspace Angular", () => {
 
     expect(root.querySelector(".recent-task.running")?.textContent).toContain("Agente trabalhando");
     expect(root.querySelector(".task-detail")?.textContent).toContain(task.title);
+    expect(root.querySelector(".task-toolbar-title h1")?.textContent).toBe(task.title);
+    expect(root.querySelector(".task-duration")?.textContent).toMatch(/01:59|02:00/);
+    expect(root.querySelector(".task-status-compact")?.textContent).toContain("Ativa");
   });
 
   it("removes a task after confirmation while preserving its workspace", async () => {
@@ -169,12 +176,12 @@ describe("Workspace Angular", () => {
     await fixture.whenStable();
     expect(root.querySelector(".remove-task-dialog")?.textContent).toContain(task.title);
     expect(root.querySelector(".workspace-warning")?.textContent).toContain(
-      "A branch e o worktree continuarão no disco",
+      "O worktree continuará no disco",
     );
 
     root.querySelector<HTMLButtonElement>(".danger-button")!.click();
     await fixture.whenStable();
-    expect(api.removeTask).toHaveBeenCalledWith(task.id);
+    expect(api.removeTask).toHaveBeenCalledWith(task.id, false);
     expect(root.querySelector(".remove-task-dialog")).toBeNull();
     expect(root.querySelector(".recent-task")).toBeNull();
     expect(root.textContent).toContain("Comece com uma tarefa");
@@ -195,6 +202,25 @@ describe("Workspace Angular", () => {
     expect(root.querySelector(".recent-task")?.textContent).toContain(task.title);
   });
 
+  it("can remove the task and its worktree when explicitly selected", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([task]);
+    const { root, fixture } = await setup();
+    root.querySelector<HTMLButtonElement>('[aria-label="Remover tarefa"]')!.click();
+    await fixture.whenStable();
+
+    const checkbox = root.querySelector<HTMLInputElement>(".worktree-removal-choice input")!;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change"));
+    await fixture.whenStable();
+    expect(root.querySelector(".workspace-warning")?.textContent).toContain(
+      "O worktree será removido",
+    );
+
+    root.querySelector<HTMLButtonElement>(".danger-button")!.click();
+    await fixture.whenStable();
+    expect(api.removeTask).toHaveBeenCalledWith(task.id, true);
+  });
+
   it("does not allow removing a task while its agent is running", async () => {
     vi.mocked(api.listTasks).mockResolvedValue([task]);
     const { app, root, fixture } = await setup();
@@ -206,6 +232,7 @@ describe("Workspace Angular", () => {
         purpose: "task",
         status: "running",
         startedAt: Date.now(),
+        endedAt: null,
         exitCode: null,
         error: null,
       },
@@ -216,6 +243,43 @@ describe("Workspace Angular", () => {
     expect(removeButton.disabled).toBe(true);
     expect(removeButton.title).toContain("Interrompa a execução");
     expect(api.removeTask).not.toHaveBeenCalled();
+  });
+
+  it("does not allow removing a task while its workspace is being prepared", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([{ ...task, status: "creating" }]);
+    const { root } = await setup();
+
+    const removeButton = root.querySelector<HTMLButtonElement>('[aria-label="Remover tarefa"]')!;
+    expect(removeButton.disabled).toBe(true);
+    expect(api.removeTask).not.toHaveBeenCalled();
+  });
+
+  it("revalidates activity when a task starts running after confirmation opens", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([task]);
+    const { app, root, fixture } = await setup();
+    root.querySelector<HTMLButtonElement>('[aria-label="Remover tarefa"]')!.click();
+    await fixture.whenStable();
+
+    app.agentState.sessions.set([
+      {
+        id: "session-late",
+        taskId: task.id,
+        agentId: "codex",
+        purpose: "task",
+        status: "running",
+        startedAt: Date.now(),
+        endedAt: null,
+        exitCode: null,
+        error: null,
+      },
+    ]);
+    root.querySelector<HTMLButtonElement>(".danger-button")!.click();
+    await fixture.whenStable();
+
+    expect(api.removeTask).not.toHaveBeenCalled();
+    expect(root.querySelector(".remove-task-error")?.textContent).toContain(
+      "Interrompa a execução",
+    );
   });
 
   it("retains the dialog and shows an error when worktree creation fails", async () => {

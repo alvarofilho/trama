@@ -6,10 +6,11 @@ import { AgentState } from "@app/core/agent-state";
 import { AgentTerminal } from "../agent-terminal/agent-terminal";
 import { type AgentId, type AgentInfo, type AgentSession } from "@core/domain/agent";
 import { PathLabel } from "../shared/path-label/path-label";
+import { AgentIcon } from "../shared/agent-icon/agent-icon";
 
 @Component({
   selector: "app-agents",
-  imports: [AgentTerminal, DatePipe, PathLabel],
+  imports: [AgentIcon, AgentTerminal, DatePipe, PathLabel],
   templateUrl: "./agents.html",
   styleUrl: "./agents.scss",
 })

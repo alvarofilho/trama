@@ -15,19 +15,7 @@ const paths = {
 @Component({
   selector: "app-icon",
   styleUrl: "./icon.scss",
-  template: `
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path [attr.d]="paths[name()]" />
-    </svg>
-  `,
+  templateUrl: "./icon.html",
   host: {
     class: "app-icon",
     "aria-hidden": "true",

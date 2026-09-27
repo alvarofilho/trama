@@ -19,63 +19,7 @@ import { type AgentSession, sessionLabels } from "@core/domain/agent";
 @Component({
   selector: "app-agent-terminal",
   styleUrl: "./agent-terminal.scss",
-  template: `
-    <section class="agent-terminal-panel" aria-label="Terminal do agente">
-      <div class="agent-terminal-heading">
-        <div>
-          <strong
-            >{{ current().purpose === "task" ? current().agentId : "Terminal de autenticação" }} ·
-            {{ labels[current().status] }}</strong
-          ><small>{{
-            current().purpose === "task"
-              ? "Responda às perguntas e permissões diretamente no terminal."
-              : "Clique nos links para abrir o navegador. Digite aqui se a ferramenta pedir uma resposta."
-          }}</small>
-        </div>
-        <div class="page-actions">
-          @if (prompt()) {
-            <button
-              class="secondary-button"
-              [disabled]="current().status !== 'running'"
-              (click)="insertPrompt()"
-            >
-              Inserir descrição
-            </button>
-          }
-          @if (current().purpose === "task") {
-            <button
-              class="secondary-button"
-              [disabled]="stopping() || current().status !== 'running'"
-              (click)="stop()"
-            >
-              {{ stopping() ? "Interrompendo…" : "Interromper" }}
-            </button>
-          }
-        </div>
-      </div>
-      @if (prompt()) {
-        <p class="terminal-hint">
-          Após concluir o login e aceitar a pasta no CLI, use “Inserir descrição” e pressione Enter
-          para enviar a tarefa.
-        </p>
-      }
-      @if (error() || current().error) {
-        <p role="alert" class="task-error-text">{{ error() || current().error }}</p>
-      }
-      <div class="agent-terminal" #host></div>
-      @if (current().exitCode !== null && current().purpose === "task") {
-        <p class="terminal-hint">
-          Código de saída: {{ current().exitCode }}. Revise as alterações antes de concluir a
-          tarefa.
-        </p>
-      }
-      <small class="terminal-hint">{{
-        current().purpose === "task"
-          ? "A saída fica apenas em memória. Fechar o Trama interrompe as sessões; iniciar novamente abre uma nova conversa."
-          : "O Trama não salva esta saída. A autenticação é gerenciada pelo CLI."
-      }}</small>
-    </section>
-  `,
+  templateUrl: "./agent-terminal.html",
 })
 export class AgentTerminal {
   readonly session = input.required<AgentSession>();

@@ -34,6 +34,7 @@ pub fn run() {
             agents::detect_agents,
             agents::configure_agent_path,
             agents::start_agent,
+            agents::remove_task,
             agents::list_agent_sessions,
             agents::read_agent_output,
             agents::write_agent_input,

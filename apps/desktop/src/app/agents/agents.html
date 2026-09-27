@@ -46,7 +46,9 @@
         [attr.aria-pressed]="current()?.id === agent.id"
         (click)="select(agent.id)"
       >
-        <span class="provider-mark" aria-hidden="true">{{ agent.name[0] }}</span>
+        <span class="provider-mark" aria-hidden="true">
+          <app-agent-icon [agentId]="agent.id" />
+        </span>
         <span class="provider-copy"
           ><strong>{{ agent.name }}</strong
           ><span

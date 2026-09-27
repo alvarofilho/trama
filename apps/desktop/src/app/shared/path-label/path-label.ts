@@ -14,8 +14,7 @@ export function displayPath(path: string): string {
 @Component({
   selector: "app-path-label",
   styleUrl: "./path-label.scss",
-  template:
-    '<span class="path-parent" aria-hidden="true">{{ parent() }}</span><span class="path-name" aria-hidden="true">{{ name() }}</span>',
+  templateUrl: "./path-label.html",
   host: {
     class: "path-label",
     "[title]": "label()",

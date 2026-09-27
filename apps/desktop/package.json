@@ -2,16 +2,18 @@
   "name": "trama-desktop",
   "version": "0.1.0",
   "scripts": {
+    "prepare": "git -C ../.. config core.hooksPath .githooks",
     "ng": "ng",
     "dev": "ng serve --host 127.0.0.1 --port 1420",
     "build": "ng build",
     "test": "ng test --watch=false",
     "tauri": "tauri",
+    "guardrails": "node scripts/check-angular-components.mjs",
     "lint": "ng lint --max-warnings=0",
     "lint:fix": "ng lint --fix",
-    "format": "prettier --write \"src/**/*.{ts,html,scss}\" \"*.{js,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,html,scss}\" \"*.{js,json}\"",
-    "check": "npm run format:check && npm run lint && npm test && npm run build"
+    "format": "prettier --write \"src/**/*.{ts,html,scss}\" \"scripts/**/*.mjs\" \"*.{js,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html,scss}\" \"scripts/**/*.mjs\" \"*.{js,json}\"",
+    "check": "npm run guardrails && npm run format:check && npm run lint && npm test && npm run build"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

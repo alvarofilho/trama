@@ -13,6 +13,7 @@ describe("Agent sessions", () => {
     purpose: "task",
     status: "running",
     startedAt: 1,
+    endedAt: null,
     exitCode: null,
     error: null,
   };

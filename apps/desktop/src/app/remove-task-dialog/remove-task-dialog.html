@@ -1,0 +1,59 @@
+<dialog
+  #dialog
+  class="remove-task-dialog"
+  aria-labelledby="remove-task-title"
+  aria-describedby="remove-task-description"
+  tabindex="-1"
+  (cancel)="cancel($event)"
+  (click)="backdrop($event)"
+  (keydown.escape)="close()"
+>
+  <div class="remove-task-heading">
+    <span class="remove-task-icon"><app-icon name="trash" /></span>
+    <div>
+      <h2 id="remove-task-title">Remover “{{ task().title }}”?</h2>
+      <p id="remove-task-description">
+        A tarefa será removida do histórico do Trama. Esta ação não pode ser desfeita.
+      </p>
+    </div>
+  </div>
+
+  @if (task().worktreePath) {
+  <label class="worktree-removal-choice">
+    <input
+      type="checkbox"
+      [checked]="removeWorktree()"
+      (change)="setRemoveWorktree($event)"
+      [disabled]="removing()"
+    />
+    <span>
+      <strong>Remover também o worktree</strong>
+      <small>Disponível após integrar a branch e sem alterações pendentes.</small>
+    </span>
+  </label>
+  } @if (task().worktreePath || task().branch) {
+  <div class="workspace-warning">
+    <strong>A branch será preservada.</strong>
+    <span>
+      {{ removeWorktree() ? "O worktree será removido após a verificação do Git." : "O worktree
+      continuará no disco." }}
+    </span>
+  </div>
+  } @if (error()) {
+  <p class="remove-task-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="remove-task-actions">
+    <button type="button" class="secondary-button" (click)="close()" [disabled]="removing()">
+      Cancelar
+    </button>
+    <button
+      type="button"
+      class="danger-button"
+      (click)="confirm.emit(removeWorktree())"
+      [disabled]="removing()"
+    >
+      <app-icon name="trash" />{{ removing() ? "Removendo…" : "Remover tarefa" }}
+    </button>
+  </div>
+</dialog>

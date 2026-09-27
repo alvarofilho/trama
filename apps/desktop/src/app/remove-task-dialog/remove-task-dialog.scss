@@ -77,6 +77,46 @@
   }
 }
 
+.worktree-removal-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin: 0 24px 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  cursor: pointer;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--red) 32%, var(--line));
+  }
+
+  input {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    margin: 1px 0 0;
+    accent-color: var(--red);
+  }
+
+  span {
+    display: grid;
+    gap: 4px;
+  }
+
+  strong {
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  small {
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.5;
+  }
+}
+
 .remove-task-error {
   margin: 0 24px 20px;
   padding: 10px 11px;
@@ -127,6 +167,7 @@
   }
 
   .workspace-warning,
+  .worktree-removal-choice,
   .remove-task-error {
     margin-inline: 18px;
   }

@@ -1,7 +1,15 @@
 import { Agents } from "./agents/agents";
 import { TaskAgent } from "./task-agent/task-agent";
 import { AgentState } from "@app/core/agent-state";
-import { Component, computed, inject, PendingTasks, signal, type OnInit } from "@angular/core";
+import {
+  Component,
+  computed,
+  inject,
+  PendingTasks,
+  signal,
+  type OnDestroy,
+  type OnInit,
+} from "@angular/core";
 import type { Project } from "@core/domain/project";
 import type { Task } from "@core/domain/task";
 import type { TaskOptions } from "@core/domain/task";
@@ -16,11 +24,13 @@ import { RemoveTaskDialog } from "./remove-task-dialog/remove-task-dialog";
   selector: "app-root",
   imports: [Icon, PathLabel, CreateTaskDialog, RemoveTaskDialog, Agents, TaskAgent],
   templateUrl: "./app.html",
-  styleUrls: ["./app-shell.scss", "./app-pages.scss"],
+  styleUrls: ["./app.scss", "./app-shell.scss", "./app-pages.scss"],
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   private readonly api = inject(WORKSPACE_API);
   private readonly pending = inject(PendingTasks);
+  private readonly clock = signal(Date.now());
+  private clockTimer?: ReturnType<typeof setInterval>;
   readonly projects = signal<Project[]>([]);
   readonly currentProject = signal<Project | null>(null);
   readonly tasks = signal<Task[]>([]);
@@ -39,6 +49,7 @@ export class App implements OnInit {
   readonly agentState = inject(AgentState);
   readonly taskItems = computed<TaskItem[]>(() => {
     const sessions = this.agentState.sessions();
+    const now = this.clock();
     return this.tasks().map((task) => {
       const own = sessions
         .filter((session) => session.taskId === task.id)
@@ -50,6 +61,9 @@ export class App implements OnInit {
         latest,
         group: taskGroup(task, latest),
         status: taskStatus(task, latest),
+        headlineStatus: taskHeadlineStatus(task, latest),
+        totalDurationMs: totalExecutionTime(own, now),
+        removalBlocked: task.status === "creating" || running !== undefined,
       };
     });
   });
@@ -92,8 +106,13 @@ export class App implements OnInit {
   );
 
   ngOnInit() {
+    this.clockTimer = setInterval(() => this.clock.set(Date.now()), 1_000);
     this.agentState.initialize();
     void this.pending.run(() => this.initialize());
+  }
+
+  ngOnDestroy() {
+    clearInterval(this.clockTimer);
   }
 
   private async initialize() {
@@ -183,19 +202,14 @@ export class App implements OnInit {
     }
   }
 
-  showRemoveTaskDialog(task: Task) {
-    const isActive =
-      task.status === "creating" ||
-      this.agentState
-        .sessions()
-        .some((session) => session.taskId === task.id && session.status === "running");
-    if (isActive) {
+  showRemoveTaskDialog(item: TaskItem) {
+    if (item.removalBlocked) {
       this.error.set("Interrompa a execução da tarefa antes de removê-la.");
       return;
     }
     this.error.set(null);
     this.removeError.set(null);
-    this.taskPendingRemoval.set(task);
+    this.taskPendingRemoval.set(item.task);
   }
 
   closeRemoveTaskDialog() {
@@ -206,16 +220,21 @@ export class App implements OnInit {
     this.removeError.set(null);
   }
 
-  async removeTask() {
+  async removeTask(removeWorktree: boolean) {
     const task = this.taskPendingRemoval();
     if (!task || this.removingTask()) {
+      return;
+    }
+    const current = this.taskItems().find((item) => item.task.id === task.id);
+    if (!current || current.removalBlocked) {
+      this.removeError.set("Interrompa a execução da tarefa antes de removê-la.");
       return;
     }
     const done = this.pending.add();
     this.removingTask.set(true);
     this.removeError.set(null);
     try {
-      await this.api.removeTask(task.id);
+      await this.api.removeTask(task.id, removeWorktree);
       const remaining = this.tasks().filter((item) => item.id !== task.id);
       this.tasks.set(remaining);
       this.selectedTaskId.set(remaining[0]?.id ?? null);
@@ -257,6 +276,17 @@ export class App implements OnInit {
     const days = Math.floor(hours / 24);
     return `há ${days} d`;
   }
+
+  formatDuration(milliseconds: number) {
+    const totalSeconds = Math.max(0, Math.floor(milliseconds / 1_000));
+    const seconds = totalSeconds % 60;
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    const minutes = totalMinutes % 60;
+    const hours = Math.floor(totalMinutes / 60);
+    return hours
+      ? `${hours}:${twoDigits(minutes)}:${twoDigits(seconds)}`
+      : `${twoDigits(minutes)}:${twoDigits(seconds)}`;
+  }
 }
 
 type TaskGroup = "attention" | "running" | "history";
@@ -266,6 +296,9 @@ interface TaskItem {
   latest: AgentSession | null;
   group: TaskGroup;
   status: { label: string; detail: string };
+  headlineStatus: "Ativa" | "Parada" | "Precisa de ação";
+  totalDurationMs: number;
+  removalBlocked: boolean;
 }
 
 interface TaskSection {
@@ -313,6 +346,31 @@ function taskStatus(task: Task, session: AgentSession | null) {
     };
   }
   return { label: "Interrompida", detail: "A execução foi parada e permanece no histórico" };
+}
+
+function taskHeadlineStatus(
+  task: Task,
+  session: AgentSession | null,
+): "Ativa" | "Parada" | "Precisa de ação" {
+  const group = taskGroup(task, session);
+  if (group === "running") {
+    return "Ativa";
+  }
+  if (group === "history") {
+    return "Parada";
+  }
+  return "Precisa de ação";
+}
+
+function totalExecutionTime(sessions: AgentSession[], now: number) {
+  return sessions.reduce((total, session) => {
+    const end = session.status === "running" ? now : session.endedAt;
+    return end == null ? total : total + Math.max(0, end - session.startedAt);
+  }, 0);
+}
+
+function twoDigits(value: number) {
+  return value.toString().padStart(2, "0");
 }
 
 function errorMessage(cause: unknown): string {

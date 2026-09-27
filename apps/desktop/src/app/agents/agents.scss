@@ -78,10 +78,13 @@ button svg {
   width: 32px;
   height: 32px;
   flex: 0 0 32px;
-  font-size: 16px;
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--text);
+}
+.provider-mark app-agent-icon {
+  width: 18px;
+  height: 18px;
 }
 .provider-copy {
   display: grid;

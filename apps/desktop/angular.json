@@ -10,7 +10,14 @@
   "projects": {
     "trama-desktop": {
       "projectType": "application",
-      "schematics": {},
+      "schematics": {
+        "@schematics/angular:component": {
+          "inlineStyle": false,
+          "inlineTemplate": false,
+          "skipTests": false,
+          "style": "scss"
+        }
+      },
       "root": "",
       "sourceRoot": "src",
       "prefix": "app",

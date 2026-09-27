@@ -6,6 +6,7 @@ import { SqliteProjectRepository } from "@core/adapters/sqlite-project-repositor
 import { SqliteTaskRepository } from "@core/adapters/sqlite-task-repository";
 import { TauriRepositoryInspector } from "@core/adapters/tauri-repository-inspector";
 import { TauriTaskWorkspaceCreator } from "@core/adapters/tauri-task-workspace-creator";
+import { TauriTaskRemovalGateway } from "@core/adapters/tauri-task-removal-gateway";
 import type { Project } from "@core/domain/project";
 import type { Task } from "@core/domain/task";
 import type { TaskOptions } from "@core/domain/task";
@@ -17,7 +18,7 @@ export interface WorkspaceApi {
   chooseDirectory(): Promise<string | null>;
   listTasks(projectId: string): Promise<Task[]>;
   createTask(project: Project, title: string, prompt: string, options: TaskOptions): Promise<Task>;
-  removeTask(taskId: string): Promise<void>;
+  removeTask(taskId: string, removeWorktree: boolean): Promise<void>;
 }
 
 export const WORKSPACE_API = new InjectionToken<WorkspaceApi>("Workspace API", {
@@ -26,7 +27,11 @@ export const WORKSPACE_API = new InjectionToken<WorkspaceApi>("Workspace API", {
     const projects = new SqliteProjectRepository();
     const tasks = new SqliteTaskRepository();
     const projectService = new ProjectService(projects, new TauriRepositoryInspector());
-    const taskService = new TaskService(tasks, new TauriTaskWorkspaceCreator());
+    const taskService = new TaskService(
+      tasks,
+      new TauriTaskWorkspaceCreator(),
+      new TauriTaskRemovalGateway(),
+    );
     return {
       async initialize() {
         await projects.initialize();
@@ -45,7 +50,7 @@ export const WORKSPACE_API = new InjectionToken<WorkspaceApi>("Workspace API", {
       listTasks: (id) => taskService.list(id),
       createTask: (project, title, prompt, options) =>
         taskService.create(project, title, prompt, options),
-      removeTask: (taskId) => taskService.remove(taskId),
+      removeTask: (taskId, removeWorktree) => taskService.remove(taskId, removeWorktree),
     };
   },
 });

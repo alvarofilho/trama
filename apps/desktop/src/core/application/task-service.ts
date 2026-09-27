@@ -1,18 +1,35 @@
 import type { Project } from "../domain/project";
-import type { Task, TaskOptions, TaskRepository, TaskWorkspaceCreator } from "../domain/task";
+import type {
+  Task,
+  TaskOptions,
+  TaskRemovalGateway,
+  TaskRepository,
+  TaskWorkspaceCreator,
+} from "../domain/task";
 
 export class TaskService {
   constructor(
     private readonly tasks: TaskRepository,
     private readonly workspaces: TaskWorkspaceCreator,
+    private readonly removal: TaskRemovalGateway,
   ) {}
 
   list(projectId: string): Promise<Task[]> {
     return this.tasks.listForProject(projectId);
   }
 
-  remove(taskId: string): Promise<void> {
-    return this.tasks.remove(taskId);
+  async remove(taskId: string, removeWorktree = false): Promise<void> {
+    const task = await this.tasks.find(taskId);
+    if (!task) {
+      throw new Error("A tarefa não foi encontrada.");
+    }
+    if (task.status === "creating") {
+      throw new Error("Aguarde a preparação da tarefa terminar antes de removê-la.");
+    }
+    if (removeWorktree && !task.worktreePath) {
+      throw new Error("Esta tarefa não possui um worktree para remover.");
+    }
+    await this.removal.remove(taskId, removeWorktree);
   }
 
   async create(
