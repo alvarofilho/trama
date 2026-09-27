@@ -1,0 +1,73 @@
+<section class="agents-page">
+  <header class="page-heading">
+    <div><h1>Agentes</h1><p>Conecte suas ferramentas para trabalhar nas tarefas do projeto.</p></div>
+    <button class="secondary-button" [disabled]="state.detecting()" (click)="state.detect()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1" /></svg>
+      {{ state.detecting() ? 'Verificando agentes…' : 'Buscar agentes' }}
+    </button>
+  </header>
+  <div class="connection-summary" role="status" aria-live="polite">
+    <span>{{ connected() }} de {{ state.agents().length || 4 }} agentes com autenticação confirmada</span>
+    @if (state.checkedAt(); as checked) { <span>Verificado às {{ checked | date:'HH:mm' }}</span> }
+  </div>
+  <div class="agents-layout">
+    <nav class="agent-directory" aria-label="Escolher agente">
+      @for (agent of state.agents(); track agent.id) {
+        <button class="agent-row" [class.selected]="current()?.id === agent.id" [attr.aria-pressed]="current()?.id === agent.id" (click)="select(agent.id)">
+          <span class="provider-mark" aria-hidden="true">{{ agent.name[0] }}</span>
+          <span class="provider-copy"><strong>{{ agent.name }}</strong><span class="provider-status" [class.connected]="agent.authentication === 'authenticated'" [class.pending]="status(agent) === 'Conectando'"><i></i>{{ status(agent) }}</span></span>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m8 5 5 5-5 5" /></svg>
+        </button>
+      } @empty { <p class="search-placeholder" role="status">Procurando ferramentas instaladas neste computador…</p> }
+      <p class="directory-note">Usamos a instalação e a conta de cada ferramenta. Nenhuma chave de API é solicitada pelo Trama.</p>
+    </nav>
+    @if (current(); as agent) {
+      <section class="agent-detail" [attr.aria-label]="'Conexão com ' + agent.name">
+        <header class="detail-heading"><div><h2>{{ agent.name }}</h2><p>{{ agent.version || 'Ferramenta de desenvolvimento local' }}</p></div><span class="connection-badge" [class.is-connected]="agent.authentication === 'authenticated' && !running()">{{ status(agent) }}</span></header>
+        @if (localError() || (state.errorAgentId() === agent.id && state.error())) { <div class="connection-notice error" role="alert">{{ localError() || state.error() }}</div> }
+
+        @if (!agent.installed) {
+          <div class="connection-state"><h3>Vamos encontrar o {{ agent.name }}.</h3><p>Procuramos no PATH e nas pastas de instalação conhecidas. Se já instalou a ferramenta, escolha o arquivo do CLI no computador.</p>
+            <div class="connection-actions"><button class="primary-button" [disabled]="!!busy()" (click)="locate(agent)">{{ busy() === agent.id ? 'Verificando arquivo…' : 'Localizar CLI' }}</button><button class="secondary-button" (click)="openLink(guides[agent.id])">Como instalar</button></div>
+          </div>
+        } @else if (running(); as session) {
+          <div class="connection-state"><h3>{{ session.purpose === 'logout' ? 'Saindo da conta…' : session.purpose === 'device-login' ? 'Entre usando o código do CLI.' : 'Continue no navegador.' }}</h3>
+            <p>{{ session.purpose === 'device-login' ? 'Abra o link no terminal abaixo e informe o código temporário. A conta precisa permitir login por código.' : session.purpose === 'logout' ? 'Aguardando a confirmação da ferramenta.' : 'Conclua a autenticação na janela aberta pela ferramenta. Se ela não abriu, clique no link exibido no terminal.' }}</p>
+            @if (session.purpose !== 'logout') { <ol class="login-progress" aria-label="Etapas da conexão"><li class="done">CLI encontrado</li><li class="active" aria-current="step">Autenticar conta</li><li>Confirmar conexão</li></ol> }
+            <p class="automatic-check">O Trama verifica a conexão automaticamente. Você pode continuar usando o aplicativo.</p>
+            <div class="connection-actions"><button class="secondary-button" [disabled]="state.detecting()" (click)="state.detect(agent.id)">{{ session.purpose === 'logout' ? 'Verificar conta' : 'Já autorizei, verificar' }}</button><button class="text-button" (click)="state.cancel(session)">Cancelar operação</button></div>
+          </div>
+        } @else if (state.checking().includes(agent.id)) {
+          <div class="connection-state" role="status"><h3>Confirmando a conexão…</h3><p>Consultando o CLI para atualizar a instalação e o estado da conta.</p></div>
+        } @else if (agent.authentication === 'authenticated') {
+          <div class="connection-state connected-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg><div><h3>Pronto para iniciar uma tarefa.</h3><p>A autenticação foi confirmada pelo CLI. No Workspace, escolha {{ agent.name }} ao iniciar o agente.</p></div></div>
+          <div class="connection-actions"><button class="secondary-button" (click)="state.detect(agent.id)">Verificar conexão</button></div>
+        } @else {
+          <div class="connection-state"><h3>{{ agent.authentication === 'unauthenticated' ? 'Conecte sua conta.' : 'Confirme sua conta na ferramenta.' }}</h3><p>{{ agent.detail }}</p>
+            @if (latest(); as session) {
+              @if (session.status === 'failed') { <p class="connection-notice error" role="status">O login não foi concluído. Consulte os detalhes abaixo e tente novamente{{ agent.id === 'codex' ? ' ou use um código' : '' }}.</p> }
+              @else if (session.status === 'stopped') { <p class="connection-notice" role="status">Login cancelado. Você pode tentar novamente quando quiser.</p> }
+              @else if (session.status === 'exited' && session.purpose !== 'logout') { <p class="connection-notice" role="status">O processo terminou, mas a conta ainda não foi confirmada. Verifique novamente ou inicie outro login.</p> }
+            }
+            <div class="connection-actions"><button class="primary-button" [disabled]="!!busy() || inUse(agent.id)" (click)="start(agent.id, 'login')">{{ busy() === agent.id ? 'Abrindo login…' : 'Conectar conta' }}</button>
+              @if (agent.id === 'codex') { <button class="secondary-button" [disabled]="!!busy() || inUse(agent.id)" (click)="start(agent.id, 'device-login')">Entrar com código</button> }
+            </div>
+            @if (inUse(agent.id)) { <p class="automatic-check">Encerre a sessão ativa deste agente antes de iniciar outro login.</p> }
+          </div>
+        }
+
+        @if (running() || (showTerminal() && latest()); as session) {
+          <div class="login-terminal"><h3>{{ sessionTitle(session) }}</h3><p>Os links abrem no seu navegador. As perguntas abaixo são da própria ferramenta.</p>@defer (on immediate) { <app-agent-terminal [session]="session" /> }</div>
+        } @else if (latest()) { <button class="text-button history-toggle" (click)="showTerminal.set(true)">Ver detalhes da última tentativa</button> }
+
+        <details class="installation-details"><summary>Instalação e opções</summary>
+          <dl><div><dt>Origem</dt><dd>{{ agent.source || 'Não localizada' }}</dd></div>@if (agent.executablePath) { <div><dt>Executável</dt><dd><span appPathLabel [path]="agent.executablePath"></span></dd></div> }</dl>
+          <div class="connection-actions"><button class="secondary-button" [disabled]="!!busy() || inUse(agent.id)" (click)="locate(agent)">Trocar executável</button>@if (agent.configured) { <button class="text-button" [disabled]="!!busy() || inUse(agent.id)" (click)="resetPath(agent.id)">Usar busca automática</button> }
+            @if (agent.installed && agent.id !== 'gemini' && agent.authentication === 'authenticated') { <button class="text-button logout-action" [disabled]="!!busy() || inUse(agent.id)" (click)="start(agent.id, 'logout')">Sair da conta no CLI</button> }
+          </div>
+          <p class="directory-note">Sair também afeta outros aplicativos que usam as mesmas credenciais do CLI.</p>
+        </details>
+      </section>
+    }
+  </div>
+</section>

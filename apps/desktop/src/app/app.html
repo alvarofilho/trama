@@ -1,0 +1,341 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand-row">
+      <span class="brand-mark" aria-hidden="true"
+        ><svg viewBox="0 0 28 28" fill="none">
+          <path d="M5 4v20M14 4v20M23 4v20M5 9l18 10M5 19 23 9" /></svg
+      ></span>
+      <span class="brand-name">trama</span
+      ><span class="build-tag">desktop</span>
+    </div>
+    <div class="project-switcher">
+      <span class="project-glyph"><svg appIcon name="folder" /></span
+      ><span class="project-switcher-copy"
+        ><strong>{{ projectLabel() }}</strong><small>Projeto local</small></span
+      >
+    </div>
+    <nav class="main-nav" aria-label="Navegação principal">
+      <button
+        class="nav-button"
+        [class.active]="page() === 'workspace'"
+        [disabled]="!currentProject()"
+        (click)="page.set('workspace')"
+        aria-label="Workspace"
+      >
+        <svg appIcon name="grid" /><span>Workspace</span>
+      </button>
+      <button
+        class="nav-button"
+        [class.active]="page() === 'projects'"
+        (click)="page.set('projects')"
+        aria-label="Projetos"
+      >
+        <svg appIcon name="folder" /><span>Projetos</span>
+      </button>
+      <button
+        class="nav-button"
+        [class.active]="page() === 'agents'"
+        (click)="page.set('agents')"
+        aria-label="Agentes"
+      >
+        <svg appIcon name="agent" /><span
+          >Agentes </span
+        >
+      </button>
+    </nav>
+    @if (projects().length) {
+    <section class="recent-projects" aria-label="Projetos recentes">
+      <div class="sidebar-label">
+        RECENTES <span>{{ projects().length }}</span>
+      </div>
+      <div class="recent-project-list">
+        @for (project of projects(); track project.id) {
+        <button
+          class="recent-project"
+          [class.selected]="currentProject()?.id === project.id"
+          (click)="openRepository(project)"
+          [disabled]="opening() || saving()"
+          [title]="displayPath(project.path)"
+        >
+          <span class="recent-project-dot"></span
+          ><span>{{ project.name }}</span>
+        </button>
+        }
+      </div>
+    </section>
+    }
+    <div class="sidebar-bottom">
+      <span class="local-note"><i></i>Dados guardados neste dispositivo</span>
+    </div>
+  </aside>
+  <main class="main-area">
+    <header class="topbar">
+      <div class="breadcrumb">
+        <span>{{ projectLabel() }}</span
+        ><span class="breadcrumb-separator">/</span
+        ><strong
+          >{{ page() === 'workspace' ? 'Workspace' : page() === 'projects' ?
+          'Projetos' : 'Agentes' }}</strong
+        >
+      </div>
+      <span class="branch-pill"
+        ><svg appIcon name="branch" />{{ currentProject()?.branch ?? '—'
+        }}</span
+      >
+    </header>
+    <div class="main-content">
+ @if (agentState.error() && (page() !== 'agents' || !agentState.errorAgentId())) { <div class="error-banner" role="alert"><span>{{ agentState.error() }}</span><button (click)="agentState.error.set(null)" aria-label="Fechar aviso do agente">×</button></div> }
+      @if (error() && !taskDialogOpen()) {
+      <div class="error-banner" role="alert">
+        <span>{{ error() }}</span
+        ><button (click)="error.set(null)" aria-label="Fechar aviso">×</button>
+      </div>
+      } @if (loading()) {
+      <div class="loading-state">
+        <span class="loading-dot"></span
+        ><strong>Preparando seu workspace</strong
+        ><small>Abrindo os dados locais do Trama…</small>
+      </div>
+      } @else if (page() === 'projects') {
+      <section class="projects-page">
+        <div class="page-heading">
+          <div>
+            <span class="eyebrow">SEUS REPOSITÓRIOS</span>
+            <h1>Projetos</h1>
+            <p>Abra pastas Git locais para organizar o trabalho por projeto.</p>
+          </div>
+          <button
+            class="primary-button"
+            (click)="openRepository()"
+            [disabled]="opening()"
+          >
+            <svg appIcon name="plus" />Abrir repositório
+          </button>
+        </div>
+        @if (projects().length) {
+        <div class="project-list">
+          @for (project of projects(); track project.id) {
+          <button
+            class="project-card"
+            [class.current]="currentProject()?.id === project.id"
+            (click)="openRepository(project)"
+            [disabled]="opening()"
+          >
+            <span class="repo-icon"><svg appIcon name="folder" /></span
+            ><span class="project-card-copy"
+              ><strong>{{ project.name }}</strong
+              ><span appPathLabel [path]="project.path"></span></span
+            ><span class="project-branch"
+              ><svg appIcon name="branch" />{{ project.branch || 'HEAD' }}</span
+            ><svg appIcon name="arrow" />
+          </button>
+          }
+        </div>
+        } @else {
+        <div class="projects-empty">
+          <svg appIcon name="folder" />
+          <h2>Nenhum projeto aberto</h2>
+          <p>Escolha uma pasta que já contenha um repositório Git.</p>
+        </div>
+        }
+      </section>
+      } @else if (page() === 'agents') {
+      <app-agents />
+      } @else if (currentProject(); as project) {
+      <section class="workspace-page">
+        <div class="page-heading">
+          <div>
+            <span class="eyebrow">WORKSPACE</span>
+            <h1>{{ project.name }}</h1>
+            <p class="repo-path">
+              <span appPathLabel [path]="project.path"></span>
+            </p>
+          </div>
+          <div class="page-actions">
+            <button
+              class="secondary-button"
+              (click)="openRepository()"
+              [disabled]="opening()"
+            >
+              <svg appIcon name="plus" />Abrir outro repositório</button
+            ><button
+              class="primary-button"
+              (click)="showTaskDialog()"
+              [disabled]="opening()"
+            >
+              <svg appIcon name="plus" />Nova tarefa
+            </button>
+          </div>
+        </div>
+        <div class="repository-card">
+          <div class="repository-card-heading">
+            <span class="repo-icon"><svg appIcon name="folder" /></span>
+            <div>
+              <strong>Repositório conectado</strong
+              ><small>Verificado pelo Git instalado</small>
+            </div>
+            <span class="connected-label"><i></i>Conectado</span>
+          </div>
+          <div class="repository-details">
+            <div>
+              <span>PASTA DO PROJETO</span
+              ><span appPathLabel [path]="project.path"></span>
+            </div>
+            <div>
+              <span>BRANCH ATUAL</span
+              ><strong
+                ><svg appIcon name="branch" />{{ project.branch || 'HEAD sem
+                branch' }}</strong
+              >
+            </div>
+            <div>
+              <span>ÚLTIMO ACESSO</span
+              ><strong>{{ formatDate(project.lastOpenedAt) }}</strong>
+            </div>
+          </div>
+        </div>
+        @if (!tasks().length) {
+        <div class="projects-empty task-empty">
+          <svg appIcon name="branch" />
+          <h2>Comece com uma tarefa</h2>
+          <p>
+            Crie uma tarefa com configurações próprias e escolha se ela terá um
+            worktree isolado.
+          </p>
+          <button
+            class="primary-button"
+            (click)="showTaskDialog()"
+            [disabled]="opening()"
+          >
+            <svg appIcon name="plus" />Criar primeira tarefa
+          </button>
+        </div>
+        } @else {
+        <section class="tasks-section">
+          <div class="tasks-section-heading">
+            <div>
+              <h2>Central de tarefas <span>{{ tasks().length }}</span></h2>
+              <p>Veja o que está em andamento e onde sua atenção é necessária.</p>
+            </div>
+            <span class="live-summary" [class.active]="taskCounts().running > 0">
+              <i></i>{{ taskCounts().running }} {{ taskCounts().running === 1 ? 'execução ativa' : 'execuções ativas' }}
+            </span>
+          </div>
+          <div class="task-filter-bar" role="group" aria-label="Filtrar tarefas por estado">
+            <button [class.active]="taskFilter() === 'all'" (click)="setTaskFilter('all')">
+              Todas <span>{{ taskCounts().all }}</span>
+            </button>
+            <button [class.active]="taskFilter() === 'running'" (click)="setTaskFilter('running')">
+              <i class="filter-dot running"></i>Em execução <span>{{ taskCounts().running }}</span>
+            </button>
+            <button [class.active]="taskFilter() === 'attention'" (click)="setTaskFilter('attention')">
+              Precisa de você <span>{{ taskCounts().attention }}</span>
+            </button>
+            <button [class.active]="taskFilter() === 'history'" (click)="setTaskFilter('history')">
+              Histórico <span>{{ taskCounts().history }}</span>
+            </button>
+          </div>
+          <div class="task-workbench">
+            <div class="task-list" aria-label="Tarefas do projeto">
+              @for (item of visibleTaskItems(); track item.task.id) {
+              <button
+                class="task-row"
+                [class.selected]="selectedTaskId() === item.task.id"
+                [class.running]="item.group === 'running'"
+                [attr.aria-pressed]="selectedTaskId() === item.task.id"
+                (click)="selectTask(item.task.id)"
+              >
+                <span [class]="'task-state-indicator ' + item.group" aria-hidden="true"><i></i></span>
+                <span class="task-row-copy">
+                  <strong>{{ item.task.title }}</strong>
+                  <span>{{ item.status.label }}</span>
+                </span>
+                <span class="task-row-meta">
+                  @if (item.latest) {
+                  <small>{{ item.latest.agentId }}</small>
+                  <time>{{ relativeTime(item.latest.startedAt) }}</time>
+                  } @else {
+                  <small>{{ item.task.agentId }}</small>
+                  <time>{{ relativeTime(item.task.createdAt) }}</time>
+                  }
+                </span>
+                <svg appIcon name="arrow" />
+              </button>
+              } @empty {
+              <div class="task-filter-empty">
+                <strong>Nenhuma tarefa neste estado</strong>
+                <span>Escolha outro filtro para continuar acompanhando o projeto.</span>
+              </div>
+              }
+            </div>
+            @if (selectedTaskItem(); as item) {
+            <aside class="task-detail" aria-label="Detalhes da tarefa selecionada">
+              <div class="task-detail-heading">
+                <div>
+                  <span [class]="'task-status-badge ' + item.group"><i></i>{{ item.status.label }}</span>
+                  <h3>{{ item.task.title }}</h3>
+                  <p>{{ item.status.detail }}</p>
+                </div>
+                <time>{{ relativeTime(item.latest?.startedAt ?? item.task.createdAt) }}</time>
+              </div>
+              <p class="task-prompt">{{ item.task.prompt }}</p>
+              <dl class="task-facts">
+                <div><dt>Agente</dt><dd>{{ item.latest?.agentId ?? item.task.agentId }}</dd></div>
+                <div><dt>Workspace</dt><dd>{{ item.task.useWorktree ? 'Worktree isolado' : 'Repositório atual' }}</dd></div>
+                @if (item.task.branch) { <div><dt>Branch</dt><dd><code>{{ item.task.branch }}</code></dd></div> }
+              </dl>
+              @if (item.task.error) { <p class="task-detail-error" role="alert">{{ item.task.error }}</p> }
+              @if (item.task.worktreePath) {
+              <div class="task-worktree-path"><span>Local da tarefa</span><span appPathLabel [path]="item.task.worktreePath"></span></div>
+              }
+              <app-task-agent [task]="item.task" [projectPath]="project.path" />
+            </aside>
+            }
+          </div>
+        </section>
+        }
+      </section>
+      } @else {
+      <section class="welcome-page">
+        <div class="welcome-mark"><svg appIcon name="branch" /></div>
+        <span class="eyebrow">UM WORKSPACE PARA AGENTES DE CÓDIGO</span>
+        <h1>Comece por um repositório.</h1>
+        <p>
+          O Trama organiza cada tarefa em seu próprio espaço de trabalho. Abra
+          uma pasta Git local para começar.
+        </p>
+        <button
+          class="primary-button"
+          (click)="openRepository()"
+          [disabled]="opening()"
+        >
+          <svg appIcon name="folder" />{{ opening() ? 'Verificando repositório…'
+          : 'Abrir repositório Git' }}
+        </button>
+        <div class="privacy-note">
+          <svg appIcon name="shield" /><span
+            >Seu código fica no computador. O Trama não pede chaves de API ou
+            credenciais dos agentes.</span
+          >
+        </div>
+        <div class="setup-steps">
+          <span class="active"><i>1</i> Repositório</span
+          ><span><i>2</i> Tarefas</span><span><i>3</i> Agente</span>
+        </div>
+      </section>
+      }
+    </div>
+    <footer class="statusbar">
+      <span><i></i>Local</span><span>SQLite · Git CLI</span
+      ><span class="statusbar-right">{{ agentState.runningCount() }} sessões em execução</span>
+    </footer>
+  </main>
+</div>
+@if (taskDialogOpen()) {
+<app-create-task-dialog
+  [saving]="saving()"
+  [error]="error()"
+  (dismiss)="closeTaskDialog()"
+  (create)="createTask($event)"
+/>
+}
