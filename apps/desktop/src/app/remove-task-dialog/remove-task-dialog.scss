@@ -1,0 +1,137 @@
+:host {
+  display: contents;
+}
+
+.remove-task-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 24px 70px #000a;
+
+  &::backdrop {
+    background: #090c10bd;
+    backdrop-filter: blur(3px);
+  }
+}
+
+.remove-task-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 24px 24px 20px;
+
+  h2 {
+    overflow-wrap: anywhere;
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.35;
+    letter-spacing: -0.025em;
+  }
+
+  p {
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.55;
+  }
+}
+
+.remove-task-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--red) 10%, var(--raised));
+  color: var(--red);
+
+  .app-icon {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+.workspace-warning {
+  display: grid;
+  gap: 4px;
+  margin: 0 24px 20px;
+  padding: 12px 13px;
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--amber) 7%, var(--panel));
+
+  strong {
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  span {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+}
+
+.remove-task-error {
+  margin: 0 24px 20px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--red) 42%, var(--line));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--red) 8%, var(--panel));
+  color: var(--red);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.remove-task-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 15px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--side);
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 70%, var(--line));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--red) 14%, var(--raised));
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--red) 22%, var(--raised));
+  }
+
+  .app-icon {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .remove-task-heading {
+    padding: 20px 18px 17px;
+  }
+
+  .workspace-warning,
+  .remove-task-error {
+    margin-inline: 18px;
+  }
+
+  .remove-task-actions {
+    padding: 14px 18px;
+  }
+}

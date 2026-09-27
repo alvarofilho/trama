@@ -1,8 +1,4 @@
-import type {
-  Project,
-  ProjectRepository,
-  RepositoryInspection,
-} from "../domain/project";
+import type { Project, ProjectRepository, RepositoryInspection } from "../domain/project";
 import { appDatabase } from "./database";
 
 interface ProjectRow {

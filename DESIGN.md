@@ -89,9 +89,9 @@ components:
 
 Superfícies foscas e densidade de ferramenta desktop mantêm tarefa, conversa e alterações próximas. O verde sálvia destaca ações e seleção sem competir com o conteúdo.
 
-O primeiro acesso usa uma linha de três etapas que representa a sequência real — projeto, agente, workspace pronto. A tela dá destaque ao formulário atual; a próxima ação permanece evidente. A nova tarefa aparece em um diálogo sobre o workspace, com projeto e branch em uma seção recolhida.
+O primeiro acesso usa uma linha de três etapas que representa a sequência real — projeto, agente, workspace pronto. A tela dá destaque ao formulário atual; a próxima ação permanece evidente. A nova tarefa aparece em um diálogo dividido entre o pedido principal e a configuração de execução. Modelo e esforço ficam recolhidos como ajustes opcionais; o isolamento recomendado permanece visível.
 
-Na revisão do Workspace, a pergunta principal passou a ser “o que precisa de mim agora?”. A visão geral agrupa tarefas por necessidade de ação, execução e histórico; a tarefa aberta apresenta uma orientação curta e uma ação principal ligada ao estado da sessão. O grafo pertence à tarefa, em vez de competir com as áreas globais da navegação. A lateral mantém a troca rápida de sessão, mas some em páginas de configuração, projeto e integração, onde não ajuda a ação atual.
+Na revisão da área de tarefas, a navegação deixou de usar “Workspace” e “Central de tarefas” como conceitos genéricos. Tarefas e Agentes permanecem como destinos explícitos; o cartão do projeto atual concentra a abertura e a troca de repositórios, sem uma aba Projetos duplicada. A lateral mostra as tarefas recentes do projeto aberto. A tarefa selecionada ocupa diretamente a área principal, com estado, contexto e próxima ação. O grafo pertence à tarefa, em vez de competir com as áreas globais da navegação.
 
 **Key Characteristics:**
 - Superfícies de grafite separadas por tom e bordas discretas.
@@ -120,7 +120,7 @@ Consolas e fallbacks monoespaçados aparecem em diff, caminhos, estatísticas e 
 
 ## Layout
 
-A direção escolhida é **A · Workspace**: lista de tarefas à esquerda, tarefa no topo, terminal e diff lado a lado. A barra lateral mede 232px e o conteúdo ocupa o restante. O Workspace abre em uma visão geral agrupada por próxima ação; ao abrir uma tarefa, os painéis usam proporção 1.07:1, com rolagem interna. Nova tarefa usa diálogo de até 660px; primeiro acesso usa uma página em duas colunas; páginas gerais chegam a 1050px.
+A direção escolhida é **A · Tarefa em foco**: tarefas recentes à esquerda e a tarefa selecionada diretamente na área principal, sem uma central intermediária. A barra lateral mede 238px; Tarefas e Agentes ficam na navegação, enquanto o cartão do projeto atual abre a gestão de projetos. Nova tarefa usa diálogo de até 820px no desktop e uma coluna em larguras compactas; páginas gerais chegam a 1050px.
 
 As alternativas B (lista ampla) e C (foco na tarefa com navegação compacta e abas) ficam registradas apenas como histórico de exploração. A direção ativa é o workspace desktop.
 
@@ -137,7 +137,7 @@ Controles têm cantos discretamente arredondados, predominantemente 5px; campos 
 ## Components
 
 - **Botões:** ação principal preenchida de sálvia, secundária com borda. Hover muda o fundo em 140ms; foco visível usa contorno de 2px com afastamento de 3px. Desabilitados têm opacidade reduzida.
-- **Campos:** superfície de painel e borda discreta; foco muda a borda para sálvia. Formulários usam labels e validação nativa de campos obrigatórios.
+- **Campos:** superfície de painel e borda discreta; foco muda a borda para sálvia. Formulários usam labels e validação nativa de campos obrigatórios. No diálogo de nova tarefa, título e instruções lideram; agente e isolamento aparecem como decisões imediatas, enquanto modelo e esforço usam divulgação progressiva.
 - **Navegação:** item ativo ganha superfície elevada. A tarefa selecionada tem tratamento verde discreto; busca filtra a lista, incluindo estado sem resultados.
 - **Terminal:** conversa, registros, aviso de espera, compositor e aba de atividade. Enter envia; Shift+Enter quebra linha. Após integração ou remoção do worktree, o compositor fica desabilitado.
 - **Diff:** lista selecionável de arquivos, sinais de adição/remoção, números de linha e bloco unificado ilustrativo. A revisão conduz a commit, merge e remoção simulados em etapas explícitas.

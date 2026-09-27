@@ -23,6 +23,7 @@ export interface TaskRepository {
   create(projectId: string, title: string, prompt: string, options: TaskOptions): Promise<Task>;
   markReady(taskId: string, branch: string | null, worktreePath: string | null): Promise<Task>;
   markFailed(taskId: string, error: string): Promise<void>;
+  remove(taskId: string): Promise<void>;
 }
 
 export interface TaskWorkspaceCreator {

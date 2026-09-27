@@ -1,0 +1,69 @@
+:host {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.agent-terminal-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+}
+
+.agent-terminal-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    font-size: 12px;
+  }
+
+  small {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.terminal-hint {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.task-error-text {
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.agent-terminal {
+  flex: 1;
+  min-height: 340px;
+  margin-top: 12px;
+  padding: 12px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #111416;
+}
+
+@media (max-width: 760px) {
+  .agent-terminal {
+    min-height: 310px;
+  }
+}

@@ -1,0 +1,111 @@
+:root {
+  font-family: "Segoe UI", Inter, Arial, sans-serif;
+  color: #e9ebed;
+  background: #191c20;
+  font-size: 13px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --bg: #191c20;
+  --side: #15171b;
+  --panel: #1c1f24;
+  --raised: #23272d;
+  --hover: #2a2f36;
+  --line: #30353d;
+  --text: #e9ebed;
+  --muted: #a0a7b1;
+  --subtle: #777f8b;
+  --accent: #b8d7ad;
+  --accent-ink: #1c3120;
+  --green: #a9d7b2;
+  --amber: #e1bd7a;
+  --red: #e3a0a1;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 680px;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.primary-button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 88%, white);
+  }
+}
+
+.secondary-button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+
+  &:hover:not(:disabled) {
+    background: var(--hover);
+  }
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* xterm creates this element dynamically, outside Angular's style scoping. */
+.agent-terminal .xterm {
+  height: 100%;
+}
+
+@media (max-width: 700px) {
+  body {
+    min-width: 360px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

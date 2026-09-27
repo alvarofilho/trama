@@ -17,6 +17,7 @@ export interface WorkspaceApi {
   chooseDirectory(): Promise<string | null>;
   listTasks(projectId: string): Promise<Task[]>;
   createTask(project: Project, title: string, prompt: string, options: TaskOptions): Promise<Task>;
+  removeTask(taskId: string): Promise<void>;
 }
 
 export const WORKSPACE_API = new InjectionToken<WorkspaceApi>("Workspace API", {
@@ -24,10 +25,7 @@ export const WORKSPACE_API = new InjectionToken<WorkspaceApi>("Workspace API", {
   factory: () => {
     const projects = new SqliteProjectRepository();
     const tasks = new SqliteTaskRepository();
-    const projectService = new ProjectService(
-      projects,
-      new TauriRepositoryInspector(),
-    );
+    const projectService = new ProjectService(projects, new TauriRepositoryInspector());
     const taskService = new TaskService(tasks, new TauriTaskWorkspaceCreator());
     return {
       async initialize() {
@@ -45,7 +43,9 @@ export const WORKSPACE_API = new InjectionToken<WorkspaceApi>("Workspace API", {
         return typeof selected === "string" ? selected : null;
       },
       listTasks: (id) => taskService.list(id),
-      createTask: (project, title, prompt, options) => taskService.create(project, title, prompt, options),
+      createTask: (project, title, prompt, options) =>
+        taskService.create(project, title, prompt, options),
+      removeTask: (taskId) => taskService.remove(taskId),
     };
   },
 });

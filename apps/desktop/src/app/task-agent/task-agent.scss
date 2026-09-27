@@ -1,0 +1,157 @@
+:host {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.task-agent-workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.session-toolbar {
+  display: flex;
+  flex: none;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 75%, var(--bg));
+}
+
+.task-agent-controls {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  padding: 11px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+
+  label {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 9px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+}
+
+.session-picker {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.task-agent-controls select,
+.session-picker select {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+}
+
+.compact {
+  min-height: 32px;
+}
+
+.session-empty,
+.session-paused {
+  display: grid;
+  flex: 1;
+  place-content: center;
+  justify-items: center;
+  min-height: 310px;
+  padding: 40px 24px;
+  text-align: center;
+
+  strong {
+    margin-top: 17px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  p {
+    max-width: 42ch;
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .secondary-button {
+    margin-top: 18px;
+  }
+}
+
+.agent-glyph {
+  position: relative;
+  width: 34px;
+  height: 28px;
+  border: 1.5px solid var(--subtle);
+  border-radius: 6px;
+
+  &::before,
+  &::after {
+    position: absolute;
+    content: "";
+  }
+
+  &::before {
+    inset: 8px 7px auto;
+    height: 6px;
+    border: solid var(--subtle);
+    border-width: 0 0 1.5px;
+    box-shadow:
+      -4px -3px 0 -2px var(--subtle),
+      4px -3px 0 -2px var(--subtle);
+  }
+
+  &::after {
+    top: -6px;
+    left: 50%;
+    width: 1.5px;
+    height: 6px;
+    background: var(--subtle);
+  }
+}
+
+.terminal-hint {
+  margin: 0;
+  padding: 0 14px 11px;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+@media (max-width: 700px) {
+  .session-toolbar,
+  .task-agent-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .task-agent-controls label,
+  .session-picker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

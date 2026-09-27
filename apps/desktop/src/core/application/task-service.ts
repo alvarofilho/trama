@@ -11,7 +11,16 @@ export class TaskService {
     return this.tasks.listForProject(projectId);
   }
 
-  async create(project: Project, title: string, prompt: string, options: TaskOptions): Promise<Task> {
+  remove(taskId: string): Promise<void> {
+    return this.tasks.remove(taskId);
+  }
+
+  async create(
+    project: Project,
+    title: string,
+    prompt: string,
+    options: TaskOptions,
+  ): Promise<Task> {
     const normalizedTitle = title.trim();
     const normalizedPrompt = prompt.trim();
     if (!normalizedTitle || !normalizedPrompt) {
@@ -19,7 +28,9 @@ export class TaskService {
     }
 
     const task = await this.tasks.create(project.id, normalizedTitle, normalizedPrompt, options);
-    if (!options.useWorktree) return this.tasks.markReady(task.id, null, null);
+    if (!options.useWorktree) {
+      return this.tasks.markReady(task.id, null, null);
+    }
     try {
       const workspace = await this.workspaces.create(project, task);
       return await this.tasks.markReady(task.id, workspace.branch, workspace.worktreePath);

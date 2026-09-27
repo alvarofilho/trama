@@ -1,4 +1,11 @@
 export type AgentId = "codex" | "claude" | "opencode" | "gemini";
+export interface AgentModel {
+  id: string;
+  name: string;
+  description: string | null;
+  isDefault: boolean;
+  reasoningEfforts: string[];
+}
 export interface AgentInfo {
   id: AgentId;
   name: string;
@@ -9,6 +16,7 @@ export interface AgentInfo {
   executablePath?: string | null;
   source?: string | null;
   configured?: boolean;
+  models?: AgentModel[];
 }
 export interface AgentSession {
   id: string;
@@ -30,12 +38,24 @@ export interface AgentGateway {
   detect(agentId?: AgentId): Promise<AgentInfo[]>;
   configurePath(agentId: AgentId, path: string | null): Promise<void>;
   list(): Promise<AgentSession[]>;
-  start(agentId: AgentId, purpose: AgentSession["purpose"], taskId?: string, projectId?: string, projectPath?: string, useWorktree?: boolean, model?: string | null, effort?: string | null): Promise<AgentSession>;
+  start(
+    agentId: AgentId,
+    purpose: AgentSession["purpose"],
+    taskId?: string,
+    projectId?: string,
+    projectPath?: string,
+    useWorktree?: boolean,
+    model?: string | null,
+    effort?: string | null,
+  ): Promise<AgentSession>;
   read(sessionId: string, cursor: number): Promise<TerminalOutput>;
   write(sessionId: string, input: string): Promise<void>;
   resize(sessionId: string, cols: number, rows: number): Promise<void>;
   stop(sessionId: string): Promise<void>;
 }
 export const sessionLabels: Record<AgentSession["status"], string> = {
-  running: "Em execução", exited: "Encerrado", stopped: "Interrompido", failed: "Falha na execução",
+  running: "Em execução",
+  exited: "Encerrado",
+  stopped: "Interrompido",
+  failed: "Falha na execução",
 };

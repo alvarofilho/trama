@@ -3,7 +3,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{Arc, Mutex},
@@ -90,6 +90,145 @@ pub struct AgentInfo {
     executable_path: Option<String>,
     source: Option<String>,
     configured: bool,
+    models: Vec<AgentModel>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModel {
+    id: String,
+    name: String,
+    description: Option<String>,
+    is_default: bool,
+    reasoning_efforts: Vec<String>,
+}
+
+fn codex_models(executable: &Executable) -> Vec<AgentModel> {
+    let mut command = Command::new(&executable.program);
+    command
+        .args(&executable.prefix)
+        .args(["app-server", "--listen", "stdio://"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let Ok(mut child) = command.spawn() else {
+        return Vec::new();
+    };
+    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+        let _ = child.kill();
+        return Vec::new();
+    };
+    let requests = [
+        serde_json::json!({"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "trama", "title": "Trama", "version": env!("CARGO_PKG_VERSION")}}}),
+        serde_json::json!({"method": "initialized", "params": {}}),
+        serde_json::json!({"id": 2, "method": "model/list", "params": {"limit": 100}}),
+    ];
+    for request in requests {
+        if writeln!(stdin, "{request}").is_err() {
+            let _ = child.kill();
+            return Vec::new();
+        }
+    }
+    let _ = stdin.flush();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if sender.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let deadline = Instant::now() + Duration::from_secs(8);
+    let mut models = Vec::new();
+    while Instant::now() < deadline {
+        let Ok(line) = receiver.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        else {
+            break;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
+        if value.get("id").and_then(|id| id.as_u64()) != Some(2) {
+            continue;
+        }
+        if let Some(data) = value
+            .pointer("/result/data")
+            .and_then(|data| data.as_array())
+        {
+            models = data
+                .iter()
+                .filter_map(|model| {
+                    let id = model
+                        .get("model")
+                        .or_else(|| model.get("id"))?
+                        .as_str()?
+                        .to_string();
+                    let name = model
+                        .get("displayName")
+                        .and_then(|name| name.as_str())
+                        .unwrap_or(&id)
+                        .to_string();
+                    let description = model
+                        .get("description")
+                        .and_then(|description| description.as_str())
+                        .map(str::to_string);
+                    let is_default = model
+                        .get("isDefault")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false);
+                    let reasoning_efforts = model
+                        .get("supportedReasoningEfforts")
+                        .and_then(|items| items.as_array())
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|item| {
+                            item.get("reasoningEffort")
+                                .and_then(|effort| effort.as_str())
+                                .map(str::to_string)
+                        })
+                        .collect();
+                    Some(AgentModel {
+                        id,
+                        name,
+                        description,
+                        is_default,
+                        reasoning_efforts,
+                    })
+                })
+                .collect();
+        }
+        break;
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    models
+}
+
+fn opencode_models(executable: &Executable) -> Vec<AgentModel> {
+    let Ok((true, output)) = probe(executable, &["models"]) else {
+        return Vec::new();
+    };
+    output
+        .lines()
+        .filter_map(|line| {
+            let id = line.trim();
+            if id.is_empty() || id.chars().any(char::is_whitespace) {
+                return None;
+            }
+            Some(AgentModel {
+                id: id.into(),
+                name: id.into(),
+                description: None,
+                is_default: false,
+                reasoning_efforts: Vec::new(),
+            })
+        })
+        .collect()
 }
 
 fn inspect_agent(id: &str, name: &str, configured: Option<PathBuf>) -> AgentInfo {
@@ -103,6 +242,7 @@ fn inspect_agent(id: &str, name: &str, configured: Option<PathBuf>) -> AgentInfo
         executable_path: configured.as_ref().map(|p| p.to_string_lossy().into_owned()),
         source: None,
         configured: configured.is_some(),
+        models: Vec::new(),
     };
     let executable = if let Some(path) = configured {
         info.detail = "O caminho salvo não está mais disponível. Localize o CLI novamente ou use a busca automática.".into();
@@ -159,6 +299,11 @@ fn inspect_agent(id: &str, name: &str, configured: Option<PathBuf>) -> AgentInfo
         }
         .into();
     }
+    info.models = match id {
+        "codex" => codex_models(&executable),
+        "opencode" => opencode_models(&executable),
+        _ => Vec::new(),
+    };
     info
 }
 

@@ -1,4 +1,4 @@
-import type { Task, TaskRepository } from "../domain/task";
+import type { Task, TaskOptions, TaskRepository } from "../domain/task";
 import { appDatabase } from "./database";
 
 interface TaskRow {
@@ -45,12 +45,23 @@ export class SqliteTaskRepository implements TaskRepository {
         error TEXT
       )
     `);
-    const columns = await db.select<{ name: string }[]>("SELECT name FROM pragma_table_info('tasks')");
+    const columns = await db.select<{ name: string }[]>(
+      "SELECT name FROM pragma_table_info('tasks')",
+    );
     const existing = new Set(columns.map(({ name }) => name));
-    for (const [name, definition] of [["agent_id", "TEXT NOT NULL DEFAULT 'codex'"], ["model", "TEXT"], ["effort", "TEXT"], ["use_worktree", "INTEGER NOT NULL DEFAULT 1"]] as const) {
-      if (!existing.has(name)) await db.execute(`ALTER TABLE tasks ADD COLUMN ${name} ${definition}`);
+    for (const [name, definition] of [
+      ["agent_id", "TEXT NOT NULL DEFAULT 'codex'"],
+      ["model", "TEXT"],
+      ["effort", "TEXT"],
+      ["use_worktree", "INTEGER NOT NULL DEFAULT 1"],
+    ] as const) {
+      if (!existing.has(name)) {
+        await db.execute(`ALTER TABLE tasks ADD COLUMN ${name} ${definition}`);
+      }
     }
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project_created ON tasks(project_id, created_at DESC)");
+    await db.execute(
+      "CREATE INDEX IF NOT EXISTS idx_tasks_project_created ON tasks(project_id, created_at DESC)",
+    );
   }
 
   async listForProject(projectId: string): Promise<Task[]> {
@@ -62,21 +73,49 @@ export class SqliteTaskRepository implements TaskRepository {
     return rows.map(mapTask);
   }
 
-  async create(projectId: string, title: string, prompt: string, options: import("../domain/task").TaskOptions): Promise<Task> {
+  async create(
+    projectId: string,
+    title: string,
+    prompt: string,
+    options: TaskOptions,
+  ): Promise<Task> {
     const db = await appDatabase();
     const task: Task = {
-      id: crypto.randomUUID(), projectId, title, prompt, ...options, status: "creating",
-      branch: null, worktreePath: null, createdAt: new Date().toISOString(), error: null,
+      id: crypto.randomUUID(),
+      projectId,
+      title,
+      prompt,
+      ...options,
+      status: "creating",
+      branch: null,
+      worktreePath: null,
+      createdAt: new Date().toISOString(),
+      error: null,
     };
     await db.execute(
       `INSERT INTO tasks (id, project_id, title, prompt, agent_id, model, effort, use_worktree, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [task.id, task.projectId, task.title, task.prompt, task.agentId, task.model, task.effort, task.useWorktree ? 1 : 0, task.status, task.createdAt],
+      [
+        task.id,
+        task.projectId,
+        task.title,
+        task.prompt,
+        task.agentId,
+        task.model,
+        task.effort,
+        task.useWorktree ? 1 : 0,
+        task.status,
+        task.createdAt,
+      ],
     );
     return task;
   }
 
-  async markReady(taskId: string, branch: string | null, worktreePath: string | null): Promise<Task> {
+  async markReady(
+    taskId: string,
+    branch: string | null,
+    worktreePath: string | null,
+  ): Promise<Task> {
     const db = await appDatabase();
     await db.execute(
       "UPDATE tasks SET status = 'ready', branch = $1, worktree_path = $2, error = NULL WHERE id = $3",
@@ -86,13 +125,23 @@ export class SqliteTaskRepository implements TaskRepository {
       "SELECT id, project_id, title, prompt, agent_id, model, effort, use_worktree, status, branch, worktree_path, created_at, error FROM tasks WHERE id = $1 LIMIT 1",
       [taskId],
     );
-    if (!rows[0]) throw new Error("A tarefa não foi encontrada depois de criar o worktree.");
+    if (!rows[0]) {
+      throw new Error("A tarefa não foi encontrada depois de criar o worktree.");
+    }
     return mapTask(rows[0]);
   }
 
   async markFailed(taskId: string, error: string): Promise<void> {
     const db = await appDatabase();
-    await db.execute("UPDATE tasks SET status = 'failed', error = $1 WHERE id = $2", [error, taskId]);
+    await db.execute("UPDATE tasks SET status = 'failed', error = $1 WHERE id = $2", [
+      error,
+      taskId,
+    ]);
+  }
+
+  async remove(taskId: string): Promise<void> {
+    const db = await appDatabase();
+    await db.execute("DELETE FROM tasks WHERE id = $1", [taskId]);
   }
 }
 

@@ -1,0 +1,31 @@
+:host {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--muted);
+  font-family: "Segoe UI", Inter, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: normal;
+  text-transform: none;
+  user-select: text;
+}
+
+.path-parent {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-name {
+  flex: 0 0 auto;
+  max-width: 65%;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

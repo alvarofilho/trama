@@ -3,7 +3,8 @@
   "version": 1,
   "cli": {
     "packageManager": "npm",
-    "analytics": false
+    "analytics": false,
+    "schematicCollections": ["angular-eslint"]
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -25,10 +26,7 @@
                 "input": "public"
               }
             ],
-            "styles": [
-              "node_modules/@xterm/xterm/css/xterm.css",
-              "src/styles.css"
-            ],
+            "styles": ["node_modules/@xterm/xterm/css/xterm.css", "src/styles.scss"],
             "outputPath": {
               "base": "dist",
               "browser": ""
@@ -44,8 +42,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "10kB",
+                  "maximumError": "12kB"
                 }
               ],
               "outputHashing": "all"
@@ -72,6 +70,12 @@
         },
         "test": {
           "builder": "@angular/build:unit-test"
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+          }
         }
       }
     }

@@ -3,7 +3,7 @@ import { App } from "./app";
 import { WORKSPACE_API, type WorkspaceApi } from "@app/core/workspace-api";
 import type { Project } from "@core/domain/project";
 import type { Task } from "@core/domain/task";
-import { AGENT_API } from '@app/core/agent-api';
+import { AGENT_API } from "@app/core/agent-api";
 
 const project: Project = {
   id: "project-1",
@@ -42,13 +42,29 @@ describe("Workspace Angular", () => {
       chooseDirectory: vi.fn().mockResolvedValue(project.path),
       listTasks: vi.fn().mockResolvedValue([]),
       createTask: vi.fn().mockResolvedValue(task),
+      removeTask: vi.fn().mockResolvedValue(undefined),
     };
     TestBed.configureTestingModule({
       imports: [App],
-      providers: [{ provide: WORKSPACE_API, useValue: api }, { provide: AGENT_API, useValue: {
-        detect: vi.fn().mockResolvedValue(['codex', 'claude', 'opencode', 'gemini'].map(id => ({ id, name: id, installed: false, version: null, authentication: 'unknown', detail: 'Não instalado' }))),
-        list: vi.fn().mockResolvedValue([]),
-      } }],
+      providers: [
+        { provide: WORKSPACE_API, useValue: api },
+        {
+          provide: AGENT_API,
+          useValue: {
+            detect: vi.fn().mockResolvedValue(
+              ["codex", "claude", "opencode", "gemini"].map((id) => ({
+                id,
+                name: id,
+                installed: false,
+                version: null,
+                authentication: "unknown",
+                detail: "Não instalado",
+              })),
+            ),
+            list: vi.fn().mockResolvedValue([]),
+          },
+        },
+      ],
     });
   });
 
@@ -64,16 +80,16 @@ describe("Workspace Angular", () => {
 
   it("restores the project, formats paths and navigates without reloading", async () => {
     const { fixture, root } = await setup();
-    expect(root.querySelector("h1")?.textContent).toBe("Trama");
-    expect(root.querySelector(".repo-path")?.textContent).toBe(
-      String.raw`C:\Users\Alvaro\Trama`,
-    );
-    root.querySelector<HTMLButtonElement>('[aria-label="Projetos"]')!.click();
+    expect(root.querySelector("h1")?.textContent).toBe("O que você quer fazer?");
+    expect(root.querySelector(".repo-path")?.textContent).toBe(String.raw`C:\Users\Alvaro\Trama`);
+    expect(root.querySelectorAll('[aria-label="Abrir projetos"]')).toHaveLength(1);
+    root.querySelector<HTMLButtonElement>(".project-switcher")!.click();
     await fixture.whenStable();
     expect(root.querySelector(".project-card")?.textContent).toContain("Trama");
-    root.querySelector<HTMLButtonElement>('[aria-label="Agentes"]')!.click();
+    root.querySelector<HTMLButtonElement>('[aria-label="Conectar agentes"]')!.click();
     await fixture.whenStable();
-    expect(root.querySelectorAll(".agent-row")).toHaveLength(4);
+    expect(root.querySelectorAll(".agent-row")).toHaveLength(0);
+    expect(root.textContent).toContain("Nenhum agente configurado");
   });
 
   it("keeps the workspace when the native picker is cancelled", async () => {
@@ -82,49 +98,49 @@ describe("Workspace Angular", () => {
     await app.openRepository();
     await fixture.whenStable();
     expect(api.openProject).not.toHaveBeenCalled();
-    expect(root.querySelector("h1")?.textContent).toBe("Trama");
+    expect(root.querySelector("h1")?.textContent).toBe("O que você quer fazer?");
     expect(app.opening()).toBe(false);
   });
 
-  it("reopens recent projects with the original filesystem path", async () => {
+  it("opens a recent task from the left sidebar", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([task]);
     const { root, fixture } = await setup();
-    root.querySelector<HTMLButtonElement>(".recent-project")!.click();
+    root.querySelector<HTMLButtonElement>(".recent-task")!.click();
     await fixture.whenStable();
-    expect(api.openProject).toHaveBeenCalledWith(project.path);
-    expect(api.chooseDirectory).not.toHaveBeenCalled();
+    expect(root.querySelector(".task-detail")?.textContent).toContain(task.title);
+    expect(root.querySelector(".recent-task.selected")?.textContent).toContain(task.title);
   });
 
   it("submits the Angular form and displays the created worktree", async () => {
     const { fixture, root } = await setup();
     root.querySelector<HTMLButtonElement>(".task-empty button")!.click();
     await fixture.whenStable();
+    expect(root.querySelector(".agent-options")?.hasAttribute("open")).toBe(false);
+    expect(root.querySelector(".task-execution")?.textContent).toContain(
+      "Trabalhar em espaço isolado",
+    );
     const input = root.querySelector<HTMLInputElement>("dialog input")!;
-    const textarea =
-      root.querySelector<HTMLTextAreaElement>("dialog textarea")!;
+    const textarea = root.querySelector<HTMLTextAreaElement>("dialog textarea")!;
     input.value = task.title;
     input.dispatchEvent(new Event("input"));
     textarea.value = task.prompt;
     textarea.dispatchEvent(new Event("input"));
     await fixture.whenStable();
     vi.mocked(api.listTasks).mockResolvedValue([task]);
-    root
-      .querySelector("form")!
-      .dispatchEvent(new Event("submit", { cancelable: true }));
+    root.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
     await fixture.whenStable();
-    expect(api.createTask).toHaveBeenCalledWith(
-      project,
-      task.title,
-      task.prompt,
-      { agentId: "codex", model: null, effort: null, useWorktree: true },
-    );
+    expect(api.createTask).toHaveBeenCalledWith(project, task.title, task.prompt, {
+      agentId: "codex",
+      model: null,
+      effort: null,
+      useWorktree: true,
+    });
     expect(root.querySelector("dialog")).toBeNull();
-    expect(root.querySelector(".task-row")?.textContent).toContain(task.title);
-    expect(root.querySelector(".task-detail")?.textContent).toContain(
-      "Pronta para iniciar",
-    );
+    expect(root.querySelector(".recent-task")?.textContent).toContain(task.title);
+    expect(root.querySelector(".task-detail")?.textContent).toContain("Pronta para iniciar");
   });
 
-  it("makes active work visible and filters tasks by attention", async () => {
+  it("makes active work visible in the recent task sidebar", async () => {
     vi.mocked(api.listTasks).mockResolvedValue([task]);
     const { app, root, fixture } = await setup();
     app.agentState.sessions.set([
@@ -141,22 +157,65 @@ describe("Workspace Angular", () => {
     ]);
     await fixture.whenStable();
 
-    expect(root.querySelector(".live-summary")?.textContent).toContain(
-      "1 execução ativa",
-    );
-    expect(root.querySelector(".task-row.running")?.textContent).toContain(
-      "Agente trabalhando",
+    expect(root.querySelector(".recent-task.running")?.textContent).toContain("Agente trabalhando");
+    expect(root.querySelector(".task-detail")?.textContent).toContain(task.title);
+  });
+
+  it("removes a task after confirmation while preserving its workspace", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([task]);
+    const { root, fixture } = await setup();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Remover tarefa"]')!.click();
+    await fixture.whenStable();
+    expect(root.querySelector(".remove-task-dialog")?.textContent).toContain(task.title);
+    expect(root.querySelector(".workspace-warning")?.textContent).toContain(
+      "A branch e o worktree continuarão no disco",
     );
 
-    const attention = Array.from(
-      root.querySelectorAll<HTMLButtonElement>(".task-filter-bar button"),
-    ).find((button) => button.textContent?.includes("Precisa de você"))!;
-    attention.click();
+    root.querySelector<HTMLButtonElement>(".danger-button")!.click();
     await fixture.whenStable();
-    expect(root.querySelector(".task-filter-empty")?.textContent).toContain(
-      "Nenhuma tarefa neste estado",
-    );
-    expect(root.querySelector(".task-detail")).toBeNull();
+    expect(api.removeTask).toHaveBeenCalledWith(task.id);
+    expect(root.querySelector(".remove-task-dialog")).toBeNull();
+    expect(root.querySelector(".recent-task")).toBeNull();
+    expect(root.textContent).toContain("Comece com uma tarefa");
+  });
+
+  it("keeps the removal confirmation open when deleting fails", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([task]);
+    vi.mocked(api.removeTask).mockRejectedValue(new Error("SQLite ocupado"));
+    const { root, fixture } = await setup();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Remover tarefa"]')!.click();
+    await fixture.whenStable();
+    root.querySelector<HTMLButtonElement>(".danger-button")!.click();
+    await fixture.whenStable();
+
+    expect(root.querySelector(".remove-task-error")?.textContent).toContain("SQLite ocupado");
+    expect(root.querySelector(".remove-task-dialog")).not.toBeNull();
+    expect(root.querySelector(".recent-task")?.textContent).toContain(task.title);
+  });
+
+  it("does not allow removing a task while its agent is running", async () => {
+    vi.mocked(api.listTasks).mockResolvedValue([task]);
+    const { app, root, fixture } = await setup();
+    app.agentState.sessions.set([
+      {
+        id: "session-1",
+        taskId: task.id,
+        agentId: "codex",
+        purpose: "task",
+        status: "running",
+        startedAt: Date.now(),
+        exitCode: null,
+        error: null,
+      },
+    ]);
+    await fixture.whenStable();
+
+    const removeButton = root.querySelector<HTMLButtonElement>('[aria-label="Remover tarefa"]')!;
+    expect(removeButton.disabled).toBe(true);
+    expect(removeButton.title).toContain("Interrompa a execução");
+    expect(api.removeTask).not.toHaveBeenCalled();
   });
 
   it("retains the dialog and shows an error when worktree creation fails", async () => {
@@ -164,23 +223,24 @@ describe("Workspace Angular", () => {
     const { app, root, fixture } = await setup();
     app.showTaskDialog();
     await fixture.whenStable();
-    await app.createTask({ title: task.title, prompt: task.prompt, agentId: "codex", model: null, effort: null, useWorktree: true });
+    await app.createTask({
+      title: task.title,
+      prompt: task.prompt,
+      agentId: "codex",
+      model: null,
+      effort: null,
+      useWorktree: true,
+    });
     await fixture.whenStable();
-    expect(root.querySelector(".dialog-error")?.textContent).toContain(
-      "Git indisponível",
-    );
+    expect(root.querySelector(".dialog-error")?.textContent).toContain("Git indisponível");
     expect(app.saving()).toBe(false);
     expect(root.querySelector("dialog")).not.toBeNull();
   });
 
   it("shows a recoverable error if initialization fails", async () => {
-    vi.mocked(api.initialize).mockRejectedValue(
-      new Error("SQLite indisponível"),
-    );
+    vi.mocked(api.initialize).mockRejectedValue(new Error("SQLite indisponível"));
     const { app, root } = await setup();
-    expect(root.querySelector('[role="alert"]')?.textContent).toContain(
-      "SQLite indisponível",
-    );
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain("SQLite indisponível");
     expect(app.loading()).toBe(false);
     expect(root.querySelector(".welcome-page")).not.toBeNull();
   });

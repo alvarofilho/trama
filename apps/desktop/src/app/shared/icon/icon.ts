@@ -9,19 +9,27 @@ const paths = {
   shield: "M12 3 19 6v5c0 4.5-3 7.5-7 10-4-2.5-7-5.5-7-10V6zM9 12l2 2 4-4",
   plus: "M12 5v14M5 12h14",
   arrow: "M5 12h14m-5-5 5 5-5 5",
+  trash: "M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5",
 };
 
 @Component({
-  selector: "svg[appIcon]",
-  template: '<svg:path [attr.d]="paths[name()]" />',
+  selector: "app-icon",
+  styleUrl: "./icon.scss",
+  template: `
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path [attr.d]="paths[name()]" />
+    </svg>
+  `,
   host: {
     class: "app-icon",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    "stroke-width": "1.6",
-    "stroke-linecap": "round",
-    "stroke-linejoin": "round",
     "aria-hidden": "true",
   },
 })
